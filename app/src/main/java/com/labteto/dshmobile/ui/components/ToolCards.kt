@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -117,8 +118,9 @@ private fun diffStats(diffs: List<DiffHunk>): Triple<Int, Int, Int> {
     var added = 0
     var removed = 0
     diffs.forEach { hunk ->
-        hunk.newText?.takeIf { it.isNotEmpty() }?.let { added += it.lines().size }
-        hunk.oldText?.takeIf { it.isNotEmpty() }?.let { removed += it.lines().size }
+        val lines = com.labteto.dshmobile.core.session.lineDiff(hunk.oldText, hunk.newText)
+        added += lines.count { it.kind == '+' }
+        removed += lines.count { it.kind == '-' }
     }
     return Triple(added, removed, diffs.map { it.path }.distinct().size)
 }
@@ -213,11 +215,21 @@ private fun DiffBody(card: ToolCardView.DiffCard) {
                 color = colors.labelSecondary,
                 modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
             )
-            hunk.oldText?.takeIf { it.isNotEmpty() }?.lines()?.forEach { line ->
-                DiffLine("-", line, colors.error)
-            }
-            hunk.newText?.takeIf { it.isNotEmpty() }?.lines()?.forEach { line ->
-                DiffLine("+", line, colors.success)
+            val lines = remember(hunk) { com.labteto.dshmobile.core.session.lineDiff(hunk.oldText, hunk.newText) }
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Column {
+                    lines.forEach { line ->
+                        Row {
+                            Text("${line.oldLine ?: ""} ${line.newLine ?: ""}", style = DsType.caption11,
+                                color = colors.labelCaption, modifier = Modifier.width(54.dp))
+                            DiffLine(line.kind.toString(), line.text, when (line.kind) {
+                                '+' -> colors.success
+                                '-' -> colors.error
+                                else -> colors.labelSecondary
+                            })
+                        }
+                    }
+                }
             }
         }
         Spacer(Modifier.height(2.dp))

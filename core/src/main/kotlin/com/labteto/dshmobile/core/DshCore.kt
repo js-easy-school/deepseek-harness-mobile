@@ -17,5 +17,6 @@ object DshCore {
      * so a client that does not opt into the live assistant stream never sees a reply being
      * written.
      */
-    const val PROTOCOL_BASELINE = "0.1.3-alpha.1"
+    const val PROTOCOL_BASELINE = "0.1.6-alpha.1"
+    const val PROTOCOL_COMMIT = "0d1f50007f9bca3f52b06e1c3074fa14d5fb0720"
 }

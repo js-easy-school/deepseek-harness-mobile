@@ -113,7 +113,7 @@ class ChatNodeVisibilityTest {
     }
 
     @Test
-    fun `a turn of tool work collapses to just its calls`() {
+    fun `a turn exposes request context alongside tool calls`() {
         val nodes = listOf(
             TurnStartNode(seq = 1, turn = 1),
             OtherNode(seq = 2, type = "step/start", data = JsonNull),
@@ -124,6 +124,6 @@ class ChatNodeVisibilityTest {
             OtherNode(seq = 7, type = "step/end", data = JsonNull),
             TurnEndNode(seq = 8, turn = 1, reasonKind = "completed"),
         )
-        assertEquals(listOf(5L), nodes.filter { it.rendersContent() }.map { it.seq })
+        assertEquals(listOf(3L, 4L, 5L), nodes.filter { it.rendersContent() }.map { it.seq })
     }
 }

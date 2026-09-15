@@ -3,6 +3,41 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.0] - 2026-09-15
+
+### Added
+
+- Photo picking now accepts several images at once. The app reads them off the UI thread,
+  checks the host's count and byte limits, reports skipped files in one message, and sends
+  the accepted images in one prompt. Drafts and attachments stay with their host and session,
+  including after a failed send.
+- The workspace has full-screen Files, Preview, and Terminal panels. Files open in text,
+  Markdown, image, PDF, and isolated HTML/SVG views. Terminals support shell selection,
+  tabs, input, resizing, renaming, closing, and reconnect recovery.
+- Settings can search archived sessions and restore them. Message feedback now has confirmed
+  ratings and retraction, including version-conflict handling.
+- System and context updates remain inspectable in the conversation. Delivered files, nested
+  tool results, images, JSON, diffs, command search, and elapsed times have clearer views.
+
+### Changed
+
+- The harness target is `0.1.6-alpha.1` plus master commit
+  `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`.
+- Permission presets are loaded from their own catalog and refreshed when the host changes it.
+  Preset mode selection is optional. Subagent prompts carry an explicit delivery choice, and
+  child transcripts, queue editing, and steering use the current session.
+- The new interface text is included in all 11 language resources. The LAN guide now explains
+  browser-session authentication separately from transport encryption.
+
+### Fixed
+
+- A newly entered host could be forgotten after a 401 probe, leaving its Sign in dialog saying
+  "Try connecting first." The attempted host is now retained.
+- Attachments from inactive or child sessions now use the owning host and session for fetching
+  and caching.
+
+Validation and remaining live coverage are tracked in [VALIDATION-0.11.0.md](docs/VALIDATION-0.11.0.md).
+
 ## [0.10.1] - 2026-09-14
 
 ### Fixed

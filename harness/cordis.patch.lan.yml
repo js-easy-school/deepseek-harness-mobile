@@ -3,8 +3,8 @@
 # ~/.dsh/profiles/web/cordis.patch.yml). A patch row replaces the targeted
 # row's whole config, so name/inject are restated.
 #
-# SECURITY: this exposes the harness to your local network with no
-# authentication. Use only on trusted networks. See harness/README.md.
+# SECURITY: the harness authenticates API requests, but this listener uses plain
+# HTTP. Use only on trusted networks. See harness/README.md.
 
 - id: webserver
   name: '@deepseek-ai/dsh-host-webserver'

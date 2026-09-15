@@ -71,7 +71,10 @@ a [feature tour](https://github.com/sorsama/deepseek-harness-mobile/wiki/Feature
   chat list, swipe left to close it, swipe left from the right edge for the session details panel.
 - **Full chat experience** — streamed turns with reasoning disclosure, markdown,
   terminal/diff/read/search/web tool cards, queue dock (edit / remove / steer), history paging,
-  image and file attachments.
+  multi-photo and file attachments, with drafts retained per host and session.
+- **Workspace panels** — tabbed text, Markdown, image, PDF and isolated HTML previews;
+  native terminal controls with a bundled xterm renderer; archived-session restore in Settings.
+- **Message feedback** — confirmed ratings and retraction, with version-conflict handling.
 - **Slash commands and skills** — the composer adjudicates a `/` line against the session's own
   command catalog and runs it through the harness's command gateway; anything the catalog does not
   claim is sent as a prompt, which is how skills are invoked.
@@ -90,12 +93,9 @@ a [feature tour](https://github.com/sorsama/deepseek-harness-mobile/wiki/Feature
 
 - Android 8.0+ (minSdk 26).
 - A running [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-  (tested against `0.1.3-alpha.1`). **0.10.0 needs harness 0.1.3** — that
-  release stopped logging a reply's deltas and moved them to a live stream
-  the app has to ask for, so the app and the harness have to move together:
-  an older app never sees an answer being written on 0.1.3, and this app
-  cannot run slash commands on 0.1.2. See
-  [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+  at `0.1.6-alpha.1` plus master commit
+  `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` for DSH Mobile `0.11.0`.
+  See [compatibility](docs/COMPATIBILITY.md) and [validation results](docs/VALIDATION-0.11.0.md).
 
 ## Quick start
 

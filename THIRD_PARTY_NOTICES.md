@@ -36,3 +36,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+
+## xterm.js
+
+The terminal renderer bundles `@xterm/xterm` **5.5.0** and `@xterm/addon-fit`
+**0.10.0**, downloaded from their npm distribution archives. Runtime code and CSS
+are in `app/src/main/assets/terminal/`; their complete MIT license texts are kept
+there as `LICENSE.xterm` and `LICENSE.addon-fit`.
+
+- Project: https://github.com/xtermjs/xterm.js
+- Sources: https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz
+  and https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.10.0.tgz
+- No remote scripts or CDN resources are loaded by the terminal screen.

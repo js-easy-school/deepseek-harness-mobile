@@ -1,0 +1,18 @@
+{
+  "upstreamCommit": "0d1f50007f9bca3f52b06e1c3074fa14d5fb0720",
+  "release": "0.1.6-alpha.1",
+  "roster": {"presets": [{"id":"standard","trust":"system","isDefault":true}], "authorable":true,"modeSelectionEnabled":false},
+  "permissionCatalog": {"options":[{"value":"read-only","name":"read-only"},{"value":"auto","name":"Auto review"}]},
+  "feedbackConflict": {"ok":false,"error":{"code":"version-conflict","current":{"messageId":"m1","rating":"positive","note":"Retained note","version":"v2","createdAt":1000,"updatedAt":2000}}},
+  "fileRead": {"absolutePath":"/workspace/README.md","version":"v1","bytes":20,"offset":1,"text":"# Preview","lines":1,"eof":false},
+  "terminalSnapshot": {"type":"snapshot","sequence":3,"screen":"hello\r\n","info":{"id":"terminal-1","title":"Shell","shell":{"path":"/bin/sh","args":[],"name":"sh"},"cwd":"/workspace","cols":80,"rows":24,"state":"running","exitCode":null,"controllerId":"attachment-2"}},
+  "terminalOutput": {"type":"output","sequence":4,"data":"world\r\n"},
+  "unarchive": {"archivedSessionIds":[]},
+  "events": [
+    {"seq":0,"time":1000,"type":"user/message","surfaceOp":"append","data":{"id":"u1","role":"user","content":[{"type":"image","attachment":{"attachmentId":"sha256:fixture","mediaType":"image/png","width":1,"height":1,"bytes":68}}]}},
+    {"seq":1,"time":1001,"type":"image/offload","data":{"targets":[{"seq":0,"imageIndexes":[0]}]}},
+    {"seq":2,"time":1002,"type":"system/message","surfaceOp":"append","data":{"turn":1,"step":1,"message":{"role":"system","content":[{"type":"text","text":"Original context"}]}}},
+    {"seq":3,"time":1003,"type":"system/message","surfaceOp":{"op":"replace","startSeq":2,"endSeq":2},"sourceEventSeqs":[2],"data":{"turn":1,"step":2,"message":{"role":"system","content":[{"type":"text","text":"Updated context"}]}}},
+    {"seq":4,"time":1004,"type":"future/notice","ignorable":true,"data":{"future":true}}
+  ]
+}

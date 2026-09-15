@@ -84,6 +84,7 @@ internal data class ChatNodeContext(
     val onOpenSubagent: (String) -> Unit,
     val onBranchFrom: (Long) -> Unit,
     val onFeedback: (Long, Boolean) -> Unit,
+    val eventTimes: Map<Long, Long> = emptyMap(),
 )
 
 /**
@@ -199,7 +200,24 @@ internal fun ChatNodeItem(node: ChatNode, context: ChatNodeContext) {
         // structural ones are not "unknown", they are bookkeeping, and printing `step/start` /
         // `step/end` between every tool call buried the actual work in noise.
         is OtherNode -> if (node.type !in STRUCTURAL_EVENT_TYPES) {
-            Text(node.type, style = DsType.caption11, color = colors.labelCaption)
+            if (node.type == "deliverables/presented") {
+                val open = com.labteto.dshmobile.ui.components.LocalFileOpener.current
+                ((node.data as? JsonObject)?.get("files") as? JsonArray)?.forEach { file ->
+                    val obj = file as? JsonObject
+                    val path = obj?.get("path").asString()
+                    if (!path.isNullOrBlank()) androidx.compose.material3.OutlinedCard(onClick = { open(path) }, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(basename(path), style = DsType.std14)
+                            Text(path, style = DsType.caption11)
+                            obj?.get("description").asString()?.let { Text(it, style = DsType.small13) }
+                        }
+                    }
+                }
+            } else JsonDisclosure(when (node.type) {
+                "system/message", "request/context" -> stringResource(R.string.system_prompt)
+                "image/offload" -> stringResource(R.string.image_offload)
+                else -> node.type
+            }, node.data)
         }
     }
 }
@@ -208,8 +226,6 @@ internal fun ChatNodeItem(node: ChatNode, context: ChatNodeContext) {
 internal val STRUCTURAL_EVENT_TYPES = setOf(
     "step/start",
     "step/end",
-    "request/header",
-    "request/context",
     "session/end-seed",
     "session/title-llm-request",
     "agent/inbox/spliced",
@@ -402,6 +418,12 @@ private fun ToolCallRow(node: ToolCallNode, context: ChatNodeContext) {
         result == null && context.running -> DisclosureState.Running
         else -> DisclosureState.Idle
     }
+    val startedAt = context.eventTimes[node.seq]
+    val endedAt = result?.let { context.eventTimes[it.seq] }
+    if (startedAt != null && endedAt != null) Text(
+        com.labteto.dshmobile.ui.components.formatDurationMs((endedAt - startedAt).coerceAtLeast(0)),
+        style = DsType.caption11, color = colors.labelCaption,
+    )
     ToolCard(
         view = card,
         expanded = expanded,
@@ -411,6 +433,11 @@ private fun ToolCallRow(node: ToolCallNode, context: ChatNodeContext) {
         iconOverride = row.variant.featherIcon(),
         state = state,
     )
+    if (expanded) {
+        result?.content?.let { JsonDisclosure(stringResource(R.string.chat_output_placeholder), it) }
+        result?.meta?.let { JsonDisclosure(node.name, it) }
+        PtcChildren(node.callId, context.nodes.filterIsInstance<OtherNode>())
+    }
     if (result?.isError == true) {
         // The dot is colour-only, so the word stays — but without a second dot beside it.
         Text(

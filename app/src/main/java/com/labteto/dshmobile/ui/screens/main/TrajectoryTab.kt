@@ -58,7 +58,12 @@ internal fun TrajectoryTab(
     modifier: Modifier = Modifier,
 ) {
     val colors = DsTheme.colors
-    val nodes = conversation?.nodes ?: emptyList()
+    val nodes = remember(conversation?.journal, conversation?.nodes) {
+        if (conversation?.journal.isNullOrEmpty()) conversation?.nodes.orEmpty()
+        else com.labteto.dshmobile.core.session.EventFold(conversation!!.sessionId).fold(
+            conversation.journal.map { it.copy(surfaceOp = null, surfaceIntent = null) },
+        ).nodes
+    }
     val groups = remember(nodes) { groupByTurn(nodes) }
 
     LazyColumn(
@@ -88,6 +93,17 @@ internal fun TrajectoryTab(
                 key = { index -> "n-${turnNodes[index].seq}" },
             ) { index ->
                 TrajectoryRow(turnNodes[index], turnNodes, cwd)
+            }
+        }
+        conversation?.journal?.forEach { event ->
+            item(key = "raw-${event.seq}") {
+                JsonDisclosure("#${event.seq} · ${event.type} · ${java.text.DateFormat.getTimeInstance().format(java.util.Date(event.time))}",
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("data", event.data)
+                        event.surfaceIntent?.let { put("surfaceOp", it) }
+                        event.sourceEventSeqs?.let { put("sourceEventSeqs", kotlinx.serialization.json.JsonArray(it.map { seq -> kotlinx.serialization.json.JsonPrimitive(seq) })) }
+                        event.ignorable?.let { put("ignorable", kotlinx.serialization.json.JsonPrimitive(it)) }
+                    })
             }
         }
         if (stats != null || usage != null) {
@@ -127,6 +143,7 @@ private fun TrajectoryRow(node: ChatNode, siblings: List<ChatNode>, cwd: String?
                 .firstOrNull { it.callId == node.callId }
             ToolLedgerRow(node, result, cwd)
         }
+        is com.labteto.dshmobile.core.session.OtherNode -> JsonDisclosure(node.type, node.data)
         else -> Unit
     }
 }
@@ -157,7 +174,7 @@ private fun ToolLedgerRow(call: ToolCallNode, result: ToolResultNode?, cwd: Stri
         ) {
             Column(Modifier.padding(start = 28.dp, top = 2.dp)) {
                 Text(stringResource(R.string.chat_input_placeholder), style = DsType.caption11, color = colors.labelCaption)
-                Text(call.arguments, style = MonoCaption, color = colors.labelTertiary)
+                JsonDisclosure(call.name, runCatching { kotlinx.serialization.json.Json.parseToJsonElement(call.arguments) }.getOrElse { kotlinx.serialization.json.JsonPrimitive(call.arguments) })
                 result?.content?.let { content ->
                     Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.chat_output_placeholder), style = DsType.caption11, color = colors.labelCaption)

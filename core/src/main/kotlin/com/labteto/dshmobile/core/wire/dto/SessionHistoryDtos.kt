@@ -650,7 +650,14 @@ object WorkspaceFollowFrameSerializer : KSerializer<WorkspaceFollowFrame> {
     override fun deserialize(decoder: Decoder): WorkspaceFollowFrame {
         val json = (decoder as JsonDecoder).decodeJsonElement().jsonObject
         return when (val type = json["type"]?.jsonPrimitive?.contentOrNull ?: "") {
-            "baseline" -> decodeFromJsonElement(WorkspaceFollowFrame.Baseline.serializer(), json)
+            "baseline" -> {
+                val value = json["value"] as? JsonObject
+                if (value == null) decodeFromJsonElement(WorkspaceFollowFrame.Baseline.serializer(), json)
+                else WorkspaceFollowFrame.Baseline(
+                    workspaces = (value["items"] as? JsonArray).orEmpty().map { decodeFromJsonElement(WorkspaceView.serializer(), it) },
+                    archivedSessionIds = (value["archivedSessionIds"] as? JsonArray).orEmpty().map { it.jsonPrimitive.content },
+                )
+            }
             "upsert" -> decodeFromJsonElement(WorkspaceFollowFrame.Upsert.serializer(), json)
             "remove" -> decodeFromJsonElement(WorkspaceFollowFrame.Remove.serializer(), json)
             "order" -> decodeFromJsonElement(WorkspaceFollowFrame.Order.serializer(), json)

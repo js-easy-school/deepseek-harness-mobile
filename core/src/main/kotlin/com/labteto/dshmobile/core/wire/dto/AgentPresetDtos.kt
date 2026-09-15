@@ -35,7 +35,8 @@ data class AgentPresetEntry(
 data class AgentPresetListValue(
     @SerialName("presets") val presets: List<AgentPresetEntry> = emptyList(),
     @SerialName("authorable") val authorable: Boolean,
-    @SerialName("hasDocument") val hasDocument: Boolean,
+    @SerialName("hasDocument") val hasDocument: Boolean = false,
+    @SerialName("modeSelectionEnabled") val modeSelectionEnabled: Boolean = true,
 )
 
 /** Request payload of `agentPreset.select`. */

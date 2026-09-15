@@ -8,7 +8,8 @@ checked against.
 
 | DSH Mobile | Harness version | Status |
 |---|---|---|
-| 0.10.1 | 0.1.3-alpha.1 | Supported baseline |
+| 0.11.0 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Current target; see [validation](VALIDATION-0.11.0.md) |
+| 0.10.1 | 0.1.3-alpha.1 | Previous baseline |
 | 0.10.0 | 0.1.3-alpha.1 | |
 | 0.9.3 | 0.1.2-alpha.1 | Previous baseline — no streaming on 0.1.3, commands refused |
 | 0.9.2 | 0.1.2-alpha.1 | Cannot send messages |
@@ -32,6 +33,15 @@ Upgrade both, or neither.
 
 **0.9.0 does not speak the 0.1.1 protocol** either; that break was at the
 handshake rather than partway through a session (see 0.9.0 in the changelog).
+
+## Current-master scope
+
+The release label alone does not identify this target: the exact commit above includes
+subsequent master changes inspected on September 15, 2026. Version 0.11.0 adds no new
+compatibility guarantee for older harnesses. Optional endpoints may be unavailable in a
+particular host composition; failures remain visible and unknown event payloads remain
+inspectable. Host-owned model adapters, SSH, MCP, Browser/Computer Use, subprocesses and
+session-log migrations remain in the harness.
 
 ## Relay
 

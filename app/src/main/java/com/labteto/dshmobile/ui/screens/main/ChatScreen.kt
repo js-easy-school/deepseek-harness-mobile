@@ -58,6 +58,11 @@ import androidx.compose.ui.res.stringResource
 import com.labteto.dshmobile.R
 import java.util.UUID
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import com.labteto.dshmobile.core.session.readImageBounded
+import com.labteto.dshmobile.core.wire.dto.ImageRejection
 
 /**
  * The chat surface: chrome, transcript or trajectory, the persistent docks, and the composer.
@@ -107,11 +112,18 @@ fun ChatScreen(
         ?: currentSession?.cwd?.let { basename(it) }
         ?: currentSessionId.orEmpty()
 
-    var draft by rememberSaveable(currentSessionId) { mutableStateOf("") }
-    var mode by rememberSaveable(currentSessionId) { mutableStateOf("queue") }
+    val connection by store.connectionState.collectAsStateWithLifecycle()
+    val hostKey = connection.host?.let { "${it.baseUrl}|${it.id}" }.orEmpty()
+    val composer = remember(hostKey, currentSessionId) {
+        store.composers.get(ComposerKey(hostKey, currentSessionId.orEmpty()))
+    }
+    var draft by composer::text
+    var mode by composer::mode
     var tab by rememberSaveable { mutableStateOf(ChatTab.Chat) }
-    val attachments = remember(currentSessionId) { mutableStateListOf<PendingAttachment>() }
+    val attachments = composer.attachments
 
+    var panelKey by remember { mutableStateOf<ComposerKey?>(null) }
+    var feedback by remember { mutableStateOf<Triple<ComposerKey, String, Boolean>?>(null) }
     var sheet by remember { mutableStateOf<ChatSheet?>(null) }
 
     // Hoisted above the tab swap so each view keeps its own scroll position across switches.
@@ -145,54 +157,64 @@ fun ChatScreen(
         is QuestionOutcome.Unsent -> answerUnsent
     }
 
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            val resolver = context.contentResolver
-            val mediaType = resolver.getType(uri)
-            val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
-            if (bytes == null || bytes.isEmpty() || mediaType == null) {
-                // Nothing came back from the provider at all — a read failure, not a refusal.
-                toast.second(context.getString(R.string.err_attachment_failed))
-                return@launch
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        val selection = store.composers.imagePickTarget
+        val target = selection?.first
+        store.composers.imagePickTarget = null
+        if (target != null && uris.isNotEmpty()) {
+            target.preparing = true
+            val limits = selection.second
+            store.composers.scope.launch {
+                val failures = mutableListOf<String>()
+                try {
+                    val existing = target.attachments.filterIsInstance<PendingAttachment.Image>()
+                    val accepted = withContext(Dispatchers.IO) {
+                        val selected = mutableListOf<PendingAttachment.Image>()
+                        val admission = com.labteto.dshmobile.core.session.PhotoBatchAdmission(limits, existing.map { it.bytes })
+                        for (uri in uris) {
+                            try {
+                                if (admission.full) {
+                                    failures.add(imageRejectionText(context, ImageRejection.TOO_MANY, limits))
+                                    continue
+                                }
+                                val resolver = context.contentResolver
+                                val mediaType = resolver.getType(uri)
+                                val bytes = (resolver.openInputStream(uri) ?: throw java.io.IOException("Unreadable image" )).use {
+                                    readImageBounded(it, limits.maxImageBytes.coerceIn(0, Int.MAX_VALUE.toLong() - 1))
+                                }
+                                if (bytes == null) {
+                                    failures.add(imageRejectionText(context, ImageRejection.TOO_LARGE, limits))
+                                    continue
+                                }
+                                val pick = decodePick(bytes)
+                                val rejection = admission.accept(
+                                    mediaType.orEmpty(), pick.detectedMediaType, bytes.size, pick.width, pick.height,
+                                )
+                                if (rejection != null) {
+                                    failures.add(imageRejectionText(context, rejection, limits))
+                                    continue
+                                }
+                                selected.add(PendingAttachment.Image(
+                                    mediaType = mediaType.orEmpty(), base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
+                                    preview = pick.preview, bytes = bytes.size, width = pick.width, height = pick.height,
+                                ))
+                            } catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { failures.add(context.getString(R.string.err_attachment_failed)) }
+                        }
+                        selected
+                    }
+                    target.attachments.addAll(accepted)
+                    if (failures.isNotEmpty()) toast.second(context.getString(
+                        R.string.photos_skipped, failures.size, failures.distinct().joinToString("; "),
+                    ))
+                } finally { target.preparing = false }
             }
-            // The host publishes its own attachment bounds, and its defaults stand in until the
-            // projection arrives. Checking them here means a refusal lands while the picture is
-            // still in hand, and names the same limit the host would have named. Files are not
-            // counted: the image bounds are the image bounds, and a file is admitted on upload.
-            val limits = imageLimits ?: ImageLimitsView()
-            val images = attachments.filterIsInstance<PendingAttachment.Image>()
-            val pick = decodePick(bytes)
-            val rejection = limits.admitBatch(
-                pendingCount = images.size,
-                pendingBytes = images.sumOf { it.bytes.toLong() },
-                addedBytes = bytes.size,
-            ) ?: limits.admitImage(
-                declaredMediaType = mediaType,
-                detectedMediaType = pick.detectedMediaType,
-                bytes = bytes.size,
-                width = pick.width,
-                height = pick.height,
-            )
-            if (rejection != null) {
-                toast.second(imageRejectionText(context, rejection, limits))
-                return@launch
-            }
-            attachments.add(
-                PendingAttachment.Image(
-                    mediaType = mediaType,
-                    base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
-                    preview = pick.preview,
-                    bytes = bytes.size,
-                    width = pick.width,
-                    height = pick.height,
-                ),
-            )
         }
     }
 
     /** Replace one pending file by identity; a chip that was removed meanwhile is left removed. */
-    fun updateFile(id: String, transform: (PendingAttachment.File) -> PendingAttachment.File) {
+    fun updateFile(target: ComposerDraft, id: String, transform: (PendingAttachment.File) -> PendingAttachment.File) {
+        val attachments = target.attachments
         val index = attachments.indexOfFirst { it is PendingAttachment.File && it.id == id }
         if (index >= 0) attachments[index] = transform(attachments[index] as PendingAttachment.File)
     }
@@ -204,16 +226,18 @@ fun ChatScreen(
      * the message is sent the receipt is usually already there; the chip shows progress until it
      * is, and the send affordance waits for it.
      */
-    fun startUpload(file: PendingAttachment.File) {
-        updateFile(file.id) { it.copy(state = FileUploadState.Uploading(0)) }
-        scope.launch {
+    fun startUpload(file: PendingAttachment.File, target: ComposerDraft = composer) {
+        updateFile(target, file.id) { it.copy(state = FileUploadState.Uploading(0)) }
+        store.composers.scope.launch {
             val result = store.uploadFile(
                 name = file.name,
+                targetSessionId = target.key.sessionId,
+                targetHost = target.key.host,
                 size = file.size,
                 open = { runCatching { context.contentResolver.openInputStream(file.uri) }.getOrNull() },
-                onProgress = { sent -> updateFile(file.id) { it.copy(state = FileUploadState.Uploading(sent)) } },
+                onProgress = { sent -> updateFile(target, file.id) { it.copy(state = FileUploadState.Uploading(sent)) } },
             )
-            updateFile(file.id) {
+            updateFile(target, file.id) {
                 when (result) {
                     is RpcResult.Ok -> it.copy(state = FileUploadState.Ready(result.value.receiptId, result.value.file))
                     is RpcResult.Err -> it.copy(state = FileUploadState.Failed(result.error.message))
@@ -223,7 +247,9 @@ fun ChatScreen(
     }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+        val target = store.composers.filePickTarget
+        store.composers.filePickTarget = null
+        if (uri == null || target == null) return@rememberLauncherForActivityResult
         val (name, size) = describeDocument(context.contentResolver, uri)
         if (name == null) {
             toast.second(context.getString(R.string.err_file_read_failed))
@@ -236,11 +262,15 @@ fun ChatScreen(
             size = size,
             state = FileUploadState.Uploading(0),
         )
-        attachments.add(file)
-        startUpload(file)
+        target.attachments.add(file)
+        startUpload(file, target)
     }
 
     fun send(text: String) {
+        if (composer.preparing || composer.submitting) { draft = text; return }
+        val delivery = mode
+        val targetId = composer.key.sessionId
+        val targetHost = composer.key.host
         val pending = attachments.toList()
         if (text.isBlank() && pending.isEmpty()) return
         val images = pending.filterIsInstance<PendingAttachment.Image>()
@@ -275,28 +305,34 @@ fun ChatScreen(
             }
 
             is Submission.Command -> {
+                composer.submitting = true
                 attachments.clear()
                 val submitted = images.map { it.encoded().asSubmit() } +
                     receipts.map { CommandSubmitAttachment.File(it) }
-                scope.launch {
-                    val outcome = store.runCommand(submission.line, submitted)
+                store.composers.scope.launch {
+                    try {
+                    val outcome = store.runCommand(submission.line, submitted, targetId, targetHost)
                     // An attachment-carrying command consumes its attachments only on success, as
                     // the harness client does: an error result is something to correct, and
                     // correcting it should not start with picking every file again. A plain
                     // command that fails keeps today's behaviour, because its whole submission was
                     // the line. The restore only lands in a composer nobody has touched meanwhile —
                     // the call is in flight while the user can still type and pick.
-                    if (submitted.isNotEmpty() && outcome is CommandOutcome.Failed) {
-                        if (draft.isBlank()) draft = text
-                        if (attachments.isEmpty()) attachments.addAll(pending)
+                    if (outcome is CommandOutcome.Failed) {
+                        composer.restoreRejected(text, pending)
                     }
                     report(outcome)
+                    } catch (e: kotlinx.coroutines.CancellationException) { composer.restoreRejected(text, pending); throw e }
+                    catch (e: Exception) { composer.restoreRejected(text, pending); toast.second(e.message ?: context.getString(R.string.panel_failed)) }
+                    finally { composer.submitting = false }
                 }
             }
 
             is Submission.Prompt -> {
+                composer.submitting = true
                 attachments.clear()
-                scope.launch {
+                store.composers.scope.launch {
+                    try {
                     // One call, whatever the count. The host admits a prompt's images as a single
                     // batch, and that batch is the only thing its per-message count and total-size
                     // bounds are measured against — sending one image per call made a single
@@ -304,22 +340,30 @@ fun ChatScreen(
                     // ride the same call as receipts; a receipt the host refuses stays staged,
                     // so restoring the chips is enough to try again.
                     val outcome = if (pending.isEmpty()) {
-                        store.prompt(text, mode)
+                        store.prompt(text, delivery, targetId, targetHost)
                     } else {
-                        store.promptWithAttachments(text, mode, images.map { it.encoded() }, receipts)
+                        store.promptWithAttachments(text, delivery, images.map { it.encoded() }, receipts, targetId, targetHost)
                     }
-                    if (outcome is PromptOutcome.Rejected) {
-                        if (draft.isBlank()) draft = text
-                        if (attachments.isEmpty()) attachments.addAll(pending)
+                    if (outcome !is PromptOutcome.Ok) {
+                        composer.restoreRejected(text, pending)
                         toast.second(
-                            imageRejectionText(context, outcome.rejection, imageLimits, outcome.reason),
+                            if (outcome is PromptOutcome.Rejected) imageRejectionText(context, outcome.rejection, imageLimits, outcome.reason)
+                            else (outcome as PromptOutcome.Failed).message,
                         )
                     }
+                    } catch (e: kotlinx.coroutines.CancellationException) { composer.restoreRejected(text, pending); throw e }
+                    catch (e: Exception) { composer.restoreRejected(text, pending); toast.second(e.message ?: context.getString(R.string.panel_failed)) }
+                    finally { composer.submitting = false }
                 }
             }
         }
     }
 
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.labteto.dshmobile.ui.media.LocalAttachmentScope provides (composer.key.host to composer.key.sessionId),
+        com.labteto.dshmobile.ui.components.LocalFileOpener provides { path: String ->
+        store.panels.get(composer.key).open(path); panelKey = composer.key
+    }) {
     Surface(modifier = Modifier.fillMaxSize(), color = colors.bgBase) {
         // The activity draws edge to edge, so every top-level surface has to consume the insets
         // itself or the chrome ends up underneath the status bar. safeDrawing covers the status
@@ -329,7 +373,7 @@ fun ChatScreen(
                 title = title,
                 running = conversation?.running == true,
                 models = models,
-                agentPresetLabel = currentSession?.agentPreset?.let { agentPresetLabel(it, agentPresets) },
+                agentPresetLabel = currentSession?.agentPreset?.takeIf { agentPresets?.modeSelectionEnabled != false }?.let { agentPresetLabel(it, agentPresets) },
                 subagentCount = subagents.size,
                 detailsOpen = detailsOpen,
                 tab = tab,
@@ -344,13 +388,19 @@ fun ChatScreen(
                 onTabChange = { tab = it },
             )
 
-            connectionError?.let { ConnectionBanner(it) }
+            connectionError?.let {
+                androidx.compose.material3.TextButton(onClick = { store.retryConnection() }) { ConnectionBanner(it) }
+            }
+            androidx.compose.material3.TextButton(onClick = { panelKey = composer.key }, enabled = currentSessionId != null) {
+                androidx.compose.material3.Text(stringResource(R.string.panel_workspace))
+            }
             if (conversation?.gap == true) {
                 ConnectionBanner(stringResource(R.string.common_reconnecting))
             }
 
             val nodeContext = ChatNodeContext(
                 nodes = conversation?.nodes ?: emptyList(),
+                eventTimes = conversation?.journal?.associate { it.seq to it.time }.orEmpty(),
                 running = conversation?.running == true,
                 cwd = currentSession?.cwd,
                 onOpenSubagent = { childId ->
@@ -358,8 +408,9 @@ fun ChatScreen(
                     sheet = ChatSheet.Subagents
                 },
                 onBranchFrom = { seq -> scope.launch { currentSessionId?.let { store.forkSession(it, seq) } } },
-                onFeedback = { _, positive ->
-                    scope.launch { report(store.runCommand(if (positive) "/feedback +1" else "/feedback -1")) }
+                onFeedback = { seq, positive ->
+                    conversation?.nodes?.filterIsInstance<com.labteto.dshmobile.core.session.AssistantMessageNode>()
+                        ?.firstOrNull { it.seq == seq }?.messageId?.let { feedback = Triple(composer.key, it, positive) }
                 },
             )
 
@@ -488,7 +539,8 @@ fun ChatScreen(
                 contextBreakdown = contextBreakdown,
                 contextPressure = contextPressure,
                 running = conversation?.running == true,
-                enabled = currentSessionId != null,
+                enabled = currentSessionId != null && !composer.submitting,
+                preparing = composer.preparing,
                 onOpenSheet = { sheet = ChatSheet.Commands },
                 // A lambda, not `::send`. The composer holds this through rememberUpdatedState,
                 // which keeps what it has when the new value is equal to it, and a reference to a
@@ -506,6 +558,9 @@ fun ChatScreen(
         DsToastHost(toast, modifier = Modifier.fillMaxWidth())
     }
 
+    }
+    panelKey?.let { key -> WorkspacePanels(store, store.panels.get(key), onDismiss = { panelKey = null }) }
+    feedback?.let { (key, id, positive) -> FeedbackDialog(store, key, id, positive) { feedback = null } }
     when (sheet) {
         ChatSheet.Commands -> CommandSheet(
             commands = commands,
@@ -513,10 +568,15 @@ fun ChatScreen(
             skills = skills,
             mode = mode,
             running = conversation?.running == true,
-            canAttach = currentSessionId != null,
+            canAttach = currentSessionId != null && !composer.preparing && !composer.submitting,
             onModeChange = { mode = it },
-            onAttach = { imagePicker.launch("image/*") },
-            onAttachFile = { filePicker.launch(arrayOf("*/*")) },
+            onAttach = {
+                if (!composer.preparing && store.composers.imagePickTarget == null) {
+                    store.composers.imagePickTarget = composer to (imageLimits ?: ImageLimitsView())
+                    imagePicker.launch("image/*")
+                }
+            },
+            onAttachFile = { store.composers.filePickTarget = composer; filePicker.launch(arrayOf("*/*")) },
             // The sheet only auto-runs commands that take no input at all, and a command that
             // takes no input takes no attachments either — so a pending attachment refuses here
             // for the same reason it refuses at the composer, rather than being silently dropped.
@@ -583,7 +643,7 @@ private fun describeDocument(resolver: android.content.ContentResolver, uri: and
  *
  * A [width] of zero means the bytes did not parse as an image at all.
  */
-private data class DecodedPick(
+internal data class DecodedPick(
     val width: Int,
     val height: Int,
     val detectedMediaType: String?,
@@ -597,7 +657,7 @@ private data class DecodedPick(
  * questions the host's admission asks — how large is this, and is it really the type its provider
  * claims — so the picker can refuse an image before spending a round trip on it rather than after.
  */
-private fun decodePick(bytes: ByteArray): DecodedPick {
+internal fun decodePick(bytes: ByteArray): DecodedPick {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds) }
     val width = bounds.outWidth.coerceAtLeast(0)
@@ -607,12 +667,12 @@ private fun decodePick(bytes: ByteArray): DecodedPick {
     } else {
         runCatching {
             val options = BitmapFactory.Options().apply {
-                inSampleSize = sampleSizeFor(width, PREVIEW_WIDTH_PX)
+                inSampleSize = sampleSizeFor(maxOf(width, height), PREVIEW_WIDTH_PX)
             }
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap()
         }.getOrNull()
     }
-    return DecodedPick(width, height, bounds.outMimeType, preview)
+    return DecodedPick(if (preview == null) 0 else width, if (preview == null) 0 else height, bounds.outMimeType, preview)
 }
 
 /** The composer thumbnail is 56dp; decoding much past that is wasted memory. */

@@ -4,7 +4,8 @@ What DSH Mobile speaks, in one page. Authoritative shapes live in the harness
 repository — `packages/api/*/src/types.ts`,
 `packages/api/gateway/src/stream-protocol.ts`, `packages/llm/llm/src/assistant-stream.ts`
 and `packages/client/file-upload/src/*` — and this document records the
-subset the app implements, against harness **0.1.3-alpha.1**.
+subset the app implements, against harness **0.1.6-alpha.1 + master** at
+`0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`.
 
 ## Envelopes
 
@@ -314,7 +315,7 @@ An `ignorable: true` marks an informational event a reader that does not
 recognise its `type` may skip; this client renders unknown events as passthrough
 rows either way.
 
-### Session format v2: attempts and settlements
+### Session format V3: attempts and settlements
 
 0.1.3 removed `assistant/chunk` from the durable log. A model attempt settles as
 **one** event:
@@ -552,3 +553,48 @@ The relay advertises `_dsh._tcp` over mDNS with TXT records `v=1`,
 `pin=<base64 SPKI>`. The service port is the primary listener's. Nothing depends
 on it: relay mode browses first and falls back to knocking 3443 and 3444 across
 the phone's own /24.
+
+
+## 0.11.0 contract additions
+
+- Event envelopes retain structured `surfaceOp`, `sourceEventSeqs`, and `ignorable`.
+  V3 replacement ranges refer to positions in the surviving model surface. Replacement
+  copies do not duplicate or erase the human's append-origin transcript. The raw journal
+  and its timing/metadata remain available in Trajectory, including system messages,
+  request-series/context updates and image-offload records.
+- `permissionPresets/catalog` returns `{options}` separately from the session's
+  `{currentValue}` selection. Reconnect and `permission-presets/catalog-changed` invalidate
+  the catalog. Auto review is offered only if present in those options.
+- `agentPresets/list` no longer requires `hasDocument`; `modeSelectionEnabled` controls
+  the composer preset switch. `subagents/prompt` includes `delivery: queue | steer`.
+  Child transcripts open their own `session/follow` address and assistant baseline.
+- `workspace/unarchiveSession` takes `{request:{sessionId}}` and returns
+  `{archivedSessionIds}`.
+  `workspace/follow` reconnects with `{type:"baseline",value:{items,archivedSessionIds}}`;
+  subsequent upsert/order/archive frames remain incremental.
+- `workspaceFiles/list|stat|read|readBytes|readAll|readRelated|changes` use the flat
+  lookup argument `workspaceFileScopeId`, plus `path` and the declared range or
+  `relativePath`. A cold/child session ID resolves its own stored workspace header.
+  `read` is line-paged; bytes use base64. Versions invalidate cached previews. The
+  Android text preview retains at most 4 Mi characters per tab and binary reads at
+  most the host cap or 32 MiB. Oversized pages report an error rather than truncating.
+- `terminal/environment|shells|create|follow|write|resize|rename|close` use `agentId`;
+  `terminal/list` uses `sessionId`. Controller writes/resizes include `attachmentId`.
+  Every follow begins with a complete snapshot, then monotonically sequenced output.
+  Authentication and RPC stay in Kotlin. Bundled xterm receives rendering data and
+  emits only input, resize, and readiness messages through its local bridge.
+- `messageFeedback/list|put|delete` take `{request:...}` and return a nested business
+  `{ok,value|error}` inside the successful RPC envelope. Creation sends an explicit
+  JSON `ifVersion:null`; a conflict returns the current item. Failed submissions keep
+  the entered note. Feedback never goes through `session/prompt`.
+
+HTML/SVG previews disable JavaScript, file/content access, external network loads, and
+navigation; they have no native bridge. Related assets are fetched by Kotlin through
+`workspaceFiles/readRelated` with bounded size and timeout. Unsupported files retain
+the path, retry, and an explicit host-open action, subject to host availability.
+
+Photo picking uses `GetMultipleContents("image/*")`. URI reads, bounds decoding and
+thumbnail decoding run sequentially off the main thread. The image admission ledger
+includes staged and newly accepted images, excluding file receipts. Valid results are
+staged together in picker order and sent in one prompt. Drafts and asynchronous work
+belong to a `(host, session)` composer for the lifetime of the app process.

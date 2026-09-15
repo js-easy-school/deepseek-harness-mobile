@@ -2,6 +2,8 @@ package com.labteto.dshmobile.ui.media
 
 import android.graphics.BitmapFactory
 import android.util.LruCache
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -29,6 +31,8 @@ import kotlinx.coroutines.withContext
  * itself. The one thing such a library would genuinely save, a bounds-only decode pass to pick a
  * sample size, is unnecessary here because the intrinsic dimensions travel with the reference.
  */
+
+val LocalAttachmentScope = androidx.compose.runtime.staticCompositionLocalOf<Pair<String, String>?> { null }
 
 /** What a raster looks like while it is being fetched, and after. */
 sealed interface AttachmentImageState {
@@ -80,7 +84,9 @@ fun rememberAttachmentImage(
     val sample = remember(intrinsicWidth, targetWidthPx) {
         sampleSizeFor(intrinsicWidth, targetWidthPx)
     }
-    val key = remember(attachmentId, sample) { "$attachmentId@$sample" }
+    val sessionId by store.currentSessionId.collectAsStateWithLifecycle()
+    val owner = LocalAttachmentScope.current ?: (store.activeHostKey.orEmpty() to sessionId.orEmpty())
+    val key = remember(owner, attachmentId, sample) { "${owner.first}|${owner.second}|$attachmentId@$sample" }
     // A cache hit resolves during composition so a scrolled-back image does not flash a skeleton.
     val state = remember(key) {
         mutableStateOf(
@@ -89,7 +95,7 @@ fun rememberAttachmentImage(
     }
     LaunchedEffect(key) {
         if (state.value is AttachmentImageState.Loading) {
-            state.value = loadAttachment(attachmentId, key, sample, store, cache)
+            state.value = loadAttachment(attachmentId, key, sample, store, cache, owner)
         }
     }
     return state
@@ -102,9 +108,10 @@ private suspend fun loadAttachment(
     sampleSize: Int,
     store: SessionStore,
     cache: AttachmentCache,
+    owner: Pair<String, String>,
 ): AttachmentImageState {
     cache.get(key)?.let { return AttachmentImageState.Ready(it) }
-    val bytes = store.fetchAttachment(attachmentId)
+    val bytes = store.fetchAttachment(attachmentId, owner.second, owner.first)
     if (bytes == null || bytes.isEmpty()) return AttachmentImageState.Failed
     val decoded = withContext(Dispatchers.Default) { decode(bytes, sampleSize) }
         ?: return AttachmentImageState.Failed

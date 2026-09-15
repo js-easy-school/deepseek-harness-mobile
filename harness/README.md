@@ -1,29 +1,28 @@
-# LAN mode for the DeepSeek Harness (companion setup for DSH Mobile)
+# LAN setup for DSH Mobile
 
-> **Consider the relay instead.** This page rebinds the harness to every
-> interface with **no authentication of any kind** — anyone on the same Wi-Fi can
-> drive the agent, which means running commands on your computer.
-> [`dsh-relay`](https://github.com/sorsama/deepseek-harness-relay) leaves the
-> harness on loopback and puts an authenticated TLS listener in front of it,
-> which is the only arrangement here that asks who you are. (Your own reverse
-> proxy, below, encrypts the link but authenticates nobody: whoever reaches the
-> proxy reaches the agent.)
->
-> ```sh
-> dsh plugin --profile web add dsh-relay
-> dsh web
-> ```
->
-> Then pair the phone from **Relay → Pair a relay**. The relay refuses to start
-> at all if it finds the harness already bound to `0.0.0.0`, so remove the patch
-> below before installing it. Everything from here down is the unauthenticated
-> path, kept for setups that cannot run the plugin.
+This guide targets harness `0.1.6-alpha.1` plus master commit
+`0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`.
 
-The DeepSeek Harness web server binds to `127.0.0.1` by default, and the
-`dsh web --host 0.0.0.0` flag is intentionally blocked for safety (the
-harness has no authentication layer yet). To use DSH Mobile over Wi-Fi without
-the relay you enable LAN serving through the harness **user patch layer** — the
-supported configuration seam.
+The harness authenticates every API call and WebSocket stream. On startup it prints a
+root URL containing a launch token. In DSH Mobile, connect to the host, choose **Sign in**,
+and paste that startup link or its token. The app exchanges it for the host's browser
+session cookie through the existing transport. A token is accepted only by the root
+exchange; it is not an API bearer token. Keep the startup link private.
+
+Authentication does not encrypt plain HTTP. Use a trusted LAN, a TLS reverse proxy,
+or the separately maintained [dsh-relay](https://github.com/sorsama/deepseek-harness-relay).
+A TLS proxy encrypts traffic; the harness still authenticates it. The relay has its own
+pairing and credential policy. Current-master relay validation is recorded separately
+in [the validation report](../docs/VALIDATION-0.11.0.md).
+
+For USB or an emulator, keep the default loopback listener and run
+`adb reverse tcp:3080 tcp:3080`, then connect to `127.0.0.1:3080` and sign in.
+No LAN patch is needed.
+
+The web listener defaults to `127.0.0.1`; `dsh web --host 0.0.0.0` remains unsupported.
+For LAN serving, use the host's user patch layer below. Host/Origin checks are separate
+from authentication: an untrusted authority gets 403, while a trusted authority without
+a valid browser session gets 401.
 
 ## Steps
 
@@ -175,10 +174,9 @@ ipconfig getifaddr en0        # macOS (Wi-Fi)
 
 ## Notes
 
-- **Security**: there is no authentication. Anyone on your LAN can reach the
-  harness while it binds `0.0.0.0`. Only use LAN mode on networks you trust, and
-  prefer the relay described at the top of this page.
-  See [../docs/SECURITY.md](../docs/SECURITY.md).
+- **Security**: every API request requires a valid browser session. LAN HTTP still
+  transmits that session and all content without encryption. Only expose the listener
+  on a trusted network, and see [../docs/SECURITY.md](../docs/SECURITY.md).
 - **Privileged features**: since harness 0.1.2 there is no loopback-only tier
   — a device that has exchanged the startup link reaches settings, credentials,
   host directory pickers and agent-preset authoring like the web GUI does. Only

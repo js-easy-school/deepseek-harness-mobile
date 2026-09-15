@@ -66,6 +66,7 @@ import com.labteto.dshmobile.core.wire.dto.WorkspaceInsertSessionBeforeRequest
 import com.labteto.dshmobile.core.wire.dto.WorkspaceOrderValue
 import com.labteto.dshmobile.core.wire.dto.WorkspaceRenameRequest
 import com.labteto.dshmobile.core.wire.dto.WorkspaceValue
+import com.labteto.dshmobile.core.wire.dto.*
 import java.io.IOException
 import java.io.InputStream
 import java.net.URLEncoder
@@ -668,6 +669,54 @@ class DshApiClient(
             )
         },
     )
+
+    suspend fun permissionCatalog(): RpcResult<PermissionCatalog> = callEmpty("permissionPresets/catalog")
+
+    suspend fun workspaceUnarchiveSession(sessionId: String): RpcResult<WorkspaceArchiveValue> =
+        callRequest("workspace/unarchiveSession", WorkspaceUnarchiveSessionRequest(sessionId))
+
+    private fun fileArgs(sessionId: String, path: String) = args {
+        put("workspaceFileScopeId", JsonPrimitive(sessionId)); put("path", JsonPrimitive(path))
+    }
+    suspend fun workspaceFileList(sessionId: String, path: String): RpcResult<WorkspaceDirectoryListing> =
+        call("workspaceFiles/list", fileArgs(sessionId, path))
+    suspend fun workspaceFileStat(sessionId: String, path: String): RpcResult<WorkspaceFileStat> =
+        call("workspaceFiles/stat", fileArgs(sessionId, path))
+    suspend fun workspaceFileRead(sessionId: String, path: String, range: WorkspaceFileRange = WorkspaceFileRange()): RpcResult<WorkspaceFileText> =
+        call("workspaceFiles/read", JsonObject(fileArgs(sessionId, path) + ("range" to encodeToJsonElement(WorkspaceFileRange.serializer(), range))))
+    suspend fun workspaceFileReadBytes(sessionId: String, path: String, range: WorkspaceByteRange = WorkspaceByteRange()): RpcResult<WorkspaceFileBytes> =
+        call("workspaceFiles/readBytes", JsonObject(fileArgs(sessionId, path) + ("range" to encodeToJsonElement(WorkspaceByteRange.serializer(), range))))
+    suspend fun workspaceFileReadAll(sessionId: String, path: String): RpcResult<WorkspaceFileBytes> =
+        call("workspaceFiles/readAll", fileArgs(sessionId, path))
+    suspend fun workspaceFileReadRelated(sessionId: String, path: String, relativePath: String): RpcResult<WorkspaceFileBytes> =
+        call("workspaceFiles/readRelated", JsonObject(fileArgs(sessionId, path) + ("relativePath" to JsonPrimitive(relativePath))))
+
+    private fun terminalArgs(sessionId: String, id: String? = null, attachmentId: String? = null) = args {
+        put("agentId", JsonPrimitive(sessionId))
+        id?.let { put("id", JsonPrimitive(it)) }
+        attachmentId?.let { put("attachmentId", JsonPrimitive(it)) }
+    }
+    suspend fun terminalEnvironment(sessionId: String): RpcResult<TerminalEnvironment> = call("terminal/environment", terminalArgs(sessionId))
+    suspend fun terminalShells(sessionId: String): RpcResult<List<TerminalShell>> = call("terminal/shells", terminalArgs(sessionId))
+    suspend fun terminalList(sessionId: String): RpcResult<List<WebTerminalInfo>> = call("terminal/list", args { put("sessionId", JsonPrimitive(sessionId)) })
+    suspend fun terminalCreate(sessionId: String, request: TerminalCreateRequest): RpcResult<WebTerminalInfo> =
+        call("terminal/create", JsonObject(terminalArgs(sessionId) + ("request" to encodeToJsonElement(TerminalCreateRequest.serializer(), request))))
+    suspend fun terminalWrite(sessionId: String, id: String, attachmentId: String, data: String): RpcResult<JsonElement> =
+        call("terminal/write", JsonObject(terminalArgs(sessionId, id, attachmentId) + ("data" to JsonPrimitive(data))))
+    suspend fun terminalResize(sessionId: String, id: String, attachmentId: String, cols: Int, rows: Int): RpcResult<JsonElement> =
+        call("terminal/resize", JsonObject(terminalArgs(sessionId, id, attachmentId) + mapOf("cols" to JsonPrimitive(cols), "rows" to JsonPrimitive(rows))))
+    suspend fun terminalRename(sessionId: String, id: String, title: String): RpcResult<JsonElement> =
+        call("terminal/rename", JsonObject(terminalArgs(sessionId, id) + ("title" to JsonPrimitive(title))))
+    suspend fun terminalClose(sessionId: String, id: String): RpcResult<JsonElement> = call("terminal/close", terminalArgs(sessionId, id))
+    suspend fun messageFeedbackList(sessionId: String): RpcResult<MessageFeedbackResult<MessageFeedbackListValue>> =
+        callRequest("messageFeedback/list", MessageFeedbackListRequest(sessionId))
+    suspend fun messageFeedbackPut(request: MessageFeedbackPutRequest): RpcResult<MessageFeedbackResult<MessageFeedbackItem>> =
+        call("messageFeedback/put", args {
+            put("request", JsonObject((encodeToJsonElement(MessageFeedbackPutRequest.serializer(), request) as JsonObject) +
+                ("ifVersion" to (request.ifVersion?.let(::JsonPrimitive) ?: JsonNull))))
+        })
+    suspend fun messageFeedbackDelete(request: MessageFeedbackDeleteRequest): RpcResult<MessageFeedbackResult<MessageFeedbackDeleteValue>> =
+        callRequest("messageFeedback/delete", request)
 
     // ------------------------------------------------------------------ file uploads
 

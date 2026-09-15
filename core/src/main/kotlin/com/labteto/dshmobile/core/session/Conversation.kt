@@ -13,6 +13,9 @@ data class SessionEventEnvelope(
     val time: Long,
     val data: JsonElement,
     val surfaceOp: String? = null,
+    val surfaceIntent: JsonElement? = null,
+    val sourceEventSeqs: List<Int>? = null,
+    val ignorable: Boolean? = null,
 )
 
 /** One content block of an assistant/user message (chat renderer shape). */
@@ -108,6 +111,8 @@ data class QueueItem(
 data class ConversationSnapshot(
     val sessionId: String,
     val nodes: List<ChatNode> = emptyList(),
+    val journal: List<SessionEventEnvelope> = emptyList(),
+    val effectiveSurface: List<SessionEventEnvelope> = emptyList(),
     val queue: List<QueueItem> = emptyList(),
     val projections: Map<String, JsonElement> = emptyMap(),
     val running: Boolean = false,

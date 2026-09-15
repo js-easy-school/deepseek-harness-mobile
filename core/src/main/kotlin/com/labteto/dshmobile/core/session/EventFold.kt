@@ -42,9 +42,10 @@ class EventFold(private val sessionId: String) {
      */
     fun fold(events: List<SessionEventEnvelope>, transient: List<SessionEventEnvelope> = emptyList()): ConversationSnapshot {
         val state = FoldState(sessionId)
-        events.forEach { state.apply(it) }
+        events.filterNot { it.isSurfaceReplacement() }.forEach { state.apply(it) }
         transient.forEach { state.applyTransient(it) }
-        return state.snapshot()
+        return state.snapshot().copy(journal = events.toList(), effectiveSurface = effectiveSurfaceEvents(events), lastSeq = events.lastOrNull()?.seq ?: -1,
+            gap = events.zipWithNext().any { (a, b) -> b.seq > a.seq + 1 })
     }
 
     /**
@@ -54,6 +55,8 @@ class EventFold(private val sessionId: String) {
     class Incremental(initial: ConversationSnapshot, private val sessionId: String) {
         private val state = FoldState(sessionId)
         private var folded: Long = initial.lastSeq.coerceAtLeast(-1)
+        private val journal = initial.journal.toMutableList()
+        private var current = initial
 
         init {
             // Seed the fold from the snapshot's nodes (rebuild buffers from scratch). A provisional
@@ -66,12 +69,18 @@ class EventFold(private val sessionId: String) {
 
         fun apply(event: SessionEventEnvelope): ConversationSnapshot? {
             if (event.seq <= folded) return null // duplicate or already-folded
-            state.apply(event)
+            journal.add(event)
+            if (initialJournalAvailable) current = EventFold(sessionId).fold(journal)
+            else {
+                if (!event.isSurfaceReplacement()) state.apply(event)
+                current = state.snapshot().copy(journal = journal.toList(), effectiveSurface = effectiveSurfaceEvents(journal), lastSeq = event.seq)
+            }
             folded = event.seq
-            return state.snapshot()
+            return current
         }
 
-        fun snapshot(): ConversationSnapshot = state.snapshot()
+        private val initialJournalAvailable = initial.journal.isNotEmpty()
+        fun snapshot(): ConversationSnapshot = current
     }
 }
 
@@ -272,7 +281,7 @@ private class FoldState(private val sessionId: String) {
 
             "subagent/descriptor" -> nodes.add(SubagentNode(event.seq, data))
 
-            "request/header", "request/context", "session/end-seed", "approval/asked", "approval/decided",
+            "session/end-seed", "approval/asked", "approval/decided",
             "approval/policy", "permission/preset", "sandbox/mode", "schedule/change", "feedback/record",
             "hook/invoked", "hook/result", "agent-preset/selected", "agent/inbox/spliced",
             "tool/code-dispatch", "tool/code-dispatch-start", "web/deepseek-search-llm-request",

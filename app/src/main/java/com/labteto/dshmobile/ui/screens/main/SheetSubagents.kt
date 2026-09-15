@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +50,7 @@ import com.labteto.dshmobile.ui.theme.DsSpacing
 import com.labteto.dshmobile.ui.theme.DsTheme
 import com.labteto.dshmobile.ui.theme.DsType
 import kotlinx.coroutines.launch
+import androidx.compose.ui.input.key.*
 
 /**
  * The subagent catalog, with the selected child's transcript inline.
@@ -64,10 +67,32 @@ internal fun SubagentsSheet(
     mode: String?,
     onDismiss: () -> Unit,
 ) {
+    androidx.compose.runtime.DisposableEffect(store) { onDispose { store.closeSubagentTranscript() } }
+    var childPanel by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val colors = DsTheme.colors
     val childId = conversation?.sessionId
-    var draft by remember { mutableStateOf("") }
+    val connection by store.connectionState.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(connection.phase) {
+        if (connection.phase == com.labteto.dshmobile.connection.ConnectionPhase.CONNECTED && childId != null) {
+            store.openSubagentTranscript(childId)
+        }
+    }
+    var draft by remember(childId) { mutableStateOf("") }
+    var sending by remember(childId) { mutableStateOf(false) }
+    var delivery by remember(childId) { mutableStateOf("queue") }
+    val queueOperation = remember(childId) { mutableStateOf(false) }
+    fun sendChild() {
+        val text = draft
+        val id = childId
+        if (text.isBlank() || id == null || sending || queueOperation.value) return
+        sending = true
+        scope.launch {
+            try { if (store.promptSubagent(id, text, delivery) && draft == text) draft = "" }
+            finally { sending = false }
+        }
+    }
+    val queues by store.sessionQueues.collectAsStateWithLifecycle()
     val childRunning = entries
         .firstOrNull { subagentId(it) == childId }
         ?.let { subagentRunning(it) } == true
@@ -108,10 +133,27 @@ internal fun SubagentsSheet(
                     )
                 } else {
                     Column(Modifier.padding(vertical = DsSpacing.small)) {
-                        child.nodes.forEach { node -> SubagentTranscriptRow(node) }
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            com.labteto.dshmobile.ui.media.LocalAttachmentScope provides (store.activeHostKey.orEmpty() to child.sessionId),
+                            com.labteto.dshmobile.ui.components.LocalFileOpener provides { path ->
+                                store.panels.get(ComposerKey(store.activeHostKey.orEmpty(), child.sessionId)).open(path); childPanel = true
+                            },
+                        ) {
+                            val childContext = ChatNodeContext(child.nodes, child.running, null,
+                                onOpenSubagent = {}, onBranchFrom = {}, onFeedback = { _, _ -> })
+                            child.nodes.forEach { node -> ChatNodeItem(node, childContext) }
+                        }
                     }
                 }
 
+                TextButton(onClick = { childPanel = true }) { Text(stringResource(R.string.panel_workspace)) }
+                if (mode == "continuable") {
+                    QueueDock(queues[child.sessionId].orEmpty(), store, sessionId = child.sessionId, blocked = sending, operationState = queueOperation)
+                    Row {
+                        TextButton(onClick = { delivery = "queue" }, enabled = !sending && !queueOperation.value) { Text((if (delivery == "queue") "✓ " else "") + stringResource(R.string.chat_queue_title)) }
+                        TextButton(onClick = { delivery = "steer" }, enabled = !sending && !queueOperation.value) { Text((if (delivery == "steer") "✓ " else "") + stringResource(R.string.chat_queue_steer)) }
+                    }
+                }
                 if (mode != "continuable") {
                     Text(
                         stringResource(R.string.subagents_readonly),
@@ -123,7 +165,15 @@ internal fun SubagentsSheet(
                         TextField(
                             value = draft,
                             onValueChange = { draft = it },
-                            modifier = Modifier.weight(1f),
+                            enabled = !sending && !queueOperation.value,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { sendChild() }),
+                            modifier = Modifier.weight(1f).onPreviewKeyEvent { event ->
+                                if (event.key == Key.Enter && (event.isCtrlPressed || event.isMetaPressed)) {
+                                    if (event.type == KeyEventType.KeyUp) sendChild()
+                                    true
+                                } else false
+                            },
                             placeholder = {
                                 Text(stringResource(R.string.subagents_message), style = DsType.std14)
                             },
@@ -136,23 +186,18 @@ internal fun SubagentsSheet(
                                 onClick = {
                                     childId?.let { id -> scope.launch { store.interruptSubagent(id) } }
                                 },
+                                enabled = !sending && !queueOperation.value,
                                 variant = DsButtonVariant.Danger,
                                 size = DsButtonSize.Small,
                             )
-                        } else {
+                        }
+                        run {
                             DsButton(
                                 text = "",
                                 icon = Icons.Filled.ArrowUpward,
-                                onClick = {
-                                    val text = draft
-                                    val id = childId
-                                    if (text.isNotBlank() && id != null) {
-                                        scope.launch { store.promptSubagent(id, text) }
-                                        draft = ""
-                                    }
-                                },
+                                onClick = { sendChild() },
                                 variant = DsButtonVariant.Info,
-                                enabled = draft.isNotBlank() && childId != null,
+                                enabled = draft.isNotBlank() && childId != null && !sending && !queueOperation.value,
                             )
                         }
                     }
@@ -160,6 +205,7 @@ internal fun SubagentsSheet(
             }
         }
     }
+    if (childPanel && childId != null) WorkspacePanels(store, store.panels.get(ComposerKey(store.activeHostKey.orEmpty(), childId))) { childPanel = false }
 }
 
 @Composable

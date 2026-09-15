@@ -166,6 +166,7 @@ data class SubagentPromptRequest(
      * message and a session message share one identity vocabulary.
      */
     @SerialName("requestId") val requestId: String,
+    @SerialName("delivery") val delivery: String = "queue",
     @SerialName("parentSessionId") val parentSessionId: String,
     @SerialName("childSessionId") val childSessionId: String,
     @SerialName("mode") val mode: String = "continuable",

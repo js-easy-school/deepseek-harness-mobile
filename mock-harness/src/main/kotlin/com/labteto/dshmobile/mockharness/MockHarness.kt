@@ -86,6 +86,9 @@ class MockHarness(
     @Volatile
     var pairingRateLimited: Boolean = false
 
+    private val streamHandlers = ConcurrentHashMap<String, (JsonObject) -> List<JsonElement>>()
+    fun onStream(endpoint: String, handler: (JsonObject) -> List<JsonElement>) { streamHandlers[endpoint] = handler }
+
     private val okHandlers = ConcurrentHashMap<String, (JsonElement) -> JsonElement>()
     private val failHandlers = ConcurrentHashMap<String, (JsonElement) -> RpcErrorData>()
     private val asyncHandlers = ConcurrentHashMap<String, suspend (JsonElement) -> JsonElement>()
@@ -157,7 +160,7 @@ class MockHarness(
         requestRemote(
             "subagents",
             "prompt",
-            required = setOf("requestId", "parentSessionId", "childSessionId", "mode", "content"),
+            required = setOf("requestId", "parentSessionId", "childSessionId", "mode", "delivery", "content"),
             optional = setOf("clientTimeZone"),
         ) { request ->
             subagentPrompts.add(request)
@@ -784,6 +787,7 @@ class MockHarness(
                         // `$events` proves readiness by answering immediately; every other
                         // stream stays silent until a test pushes to it.
                         if (endpoint == EVENTS_ENDPOINT) send(streamItem(streamId, readyFrame()))
+                        streamHandlers[endpoint]?.invoke((message["payload"] as? JsonObject)?.get("args") as? JsonObject ?: JsonObject(emptyMap()))?.forEach { send(streamItem(streamId, it)) }
                     }
                     "cancel" -> {
                         streams.remove(streamId)

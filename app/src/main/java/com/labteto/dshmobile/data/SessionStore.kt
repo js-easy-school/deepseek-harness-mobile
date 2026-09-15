@@ -93,6 +93,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.time.Instant
 import java.util.TimeZone
+import com.labteto.dshmobile.core.wire.dto.PermissionCatalog
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -249,6 +250,18 @@ class SessionStore @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Any()
     private val baselineMutex = Mutex()
+    val connectionState = connectionManager.state
+    val activeHostKey: String? get() = connectionManager.state.value.host?.let { "${it.baseUrl}|${it.id}" }
+    internal val panels = com.labteto.dshmobile.ui.screens.main.PanelRepository()
+    internal val composers = com.labteto.dshmobile.ui.screens.main.ComposerRepository()
+    fun apiForHost(key: String?): DshApiClient? = if (key != null && key == activeHostKey) connectionManager.connectedApi else null
+    fun muxForHost(key: String?) = if (key != null && key == activeHostKey) connectionManager.generation?.mux else null
+    fun retryConnection() = connectionManager.reconnectIfNeeded()
+    private val permissionCatalog = MutableStateFlow<PermissionCatalog?>(null)
+    private var permissionCatalogEpoch = 0L
+    private val queuesBySession = MutableStateFlow<Map<String, List<QueueItem>>>(emptyMap())
+    val sessionQueues: StateFlow<Map<String, List<QueueItem>>> = queuesBySession.asStateFlow()
+
 
     /** Coalesces transcript rebuilds during a stream; see [observeRebuildTicks]. */
     private val rebuildTicks = Channel<Unit>(Channel.CONFLATED)
@@ -354,7 +367,10 @@ class SessionStore @Inject constructor(
     // deriving keeps them in lockstep with the transcript and adds no round trips. A null value
     // means the key is absent — the harness composes no such service — and callers hide the UI.
 
-    val permissions: StateFlow<PermissionSelect?> = projectionOf(PermissionSelect.serializer(), "permissions")
+    val permissions: StateFlow<PermissionSelect?> = combine(
+        projectionOf(PermissionSelect.serializer(), "permissions"), permissionCatalog,
+    ) { selection, catalog -> selection?.copy(options = catalog?.options ?: emptyList()) }
+        .stateIn(scope, SharingStarted.Eagerly, null)
     val sessionStats: StateFlow<SessionStatsView?> = projectionOf(SessionStatsView.serializer(), "sessionStats")
     val tokenUsage: StateFlow<TokenUsageView?> = projectionOf(TokenUsageView.serializer(), "tokenUsage")
     val contextPressure: StateFlow<ContextPressureView?> =
@@ -442,6 +458,7 @@ class SessionStore @Inject constructor(
 
     /** The open session's live journal. Cancelled and replaced whenever the open session changes. */
     private var followJob: Job? = null
+    private var childFollowJob: Job? = null
 
     /** Host-wide live control (queue, jobs, projections). One per connection generation. */
     private var controlJob: Job? = null
@@ -580,6 +597,7 @@ class SessionStore @Inject constructor(
         // Host-scoped and needed before anything is tapped: the chat bar names the session's preset
         // as soon as it renders, and without the roster it could only show the raw wire id.
         refreshAgentPresets()
+        refreshPermissionCatalog()
         // On a reconnect `currentSessionId` is already set, so the resolver only ever runs on the
         // first connect of a process — no double-open, and reconnect keeps reopening what was open.
         val sid = currentSessionId.value ?: resolveInitialSession() ?: return
@@ -651,6 +669,7 @@ class SessionStore @Inject constructor(
                 val running = args.getOrNull(1)?.jsonPrimitive?.booleanOrNull ?: false
                 setRunning(sid, running)
             }
+            "permission-presets/catalog-changed" -> scope.launch { refreshPermissionCatalog() }
             "api-session/activity" -> {
                 // Only reorders the list; the durable value is the session's own projection, so a
                 // missed one is corrected by the next list read rather than lost.
@@ -726,6 +745,7 @@ class SessionStore @Inject constructor(
     private fun handleControlFrame(frame: SessionControlFrame) {
         when (frame) {
             is SessionControlFrame.Baseline -> {
+                queuesBySession.value = frame.value.queues.mapValues { (_, items) -> items.map(::queuedInboxItemToQueueItem) }
                 val sid = synchronized(lock) { currentId } ?: return
                 frame.value.queues[sid]?.let { items -> applyQueue(sid, items) }
                 frame.value.jobs[sid]?.let { jobs -> applyJobs(sid, jobs) }
@@ -744,6 +764,7 @@ class SessionStore @Inject constructor(
     }
 
     private fun applyQueue(sessionId: String, items: List<QueuedInboxItem>) {
+        queuesBySession.value = queuesBySession.value + (sessionId to items.map(::queuedInboxItemToQueueItem))
         synchronized(lock) {
             if (sessionId == currentId) {
                 currentQueue = items.map { queuedInboxItemToQueueItem(it) }
@@ -1420,8 +1441,8 @@ class SessionStore @Inject constructor(
         }
     }
 
-    suspend fun prompt(text: String, mode: String) =
-        promptContent(mode, listOf(PromptContentPart.Text(text)))
+    suspend fun prompt(text: String, mode: String, targetSessionId: String? = currentSessionId.value, targetHost: String? = activeHostKey) =
+        promptContent(mode, listOf(PromptContentPart.Text(text)), targetSessionId, targetHost)
 
     /**
      * Prompt with attachments: raster images (bytes submitted base64, as the browser wire does)
@@ -1439,12 +1460,14 @@ class SessionStore @Inject constructor(
         mode: String,
         images: List<EncodedImageAttachment>,
         fileReceipts: List<String> = emptyList(),
+        targetSessionId: String? = currentSessionId.value,
+        targetHost: String? = activeHostKey,
     ): PromptOutcome {
         val parts = mutableListOf<PromptContentPart>()
         if (text.isNotBlank()) parts.add(PromptContentPart.Text(text))
         images.mapTo(parts) { PromptContentPart.Image(it.mediaType, it.data, it.name) }
         fileReceipts.mapTo(parts) { PromptContentPart.File(it) }
-        return promptContent(mode, parts)
+        return promptContent(mode, parts, targetSessionId, targetHost)
     }
 
     /**
@@ -1465,10 +1488,12 @@ class SessionStore @Inject constructor(
         size: Long,
         open: () -> InputStream?,
         onProgress: (sent: Long) -> Unit = {},
+        targetSessionId: String? = currentSessionId.value,
+        targetHost: String? = activeHostKey,
     ): RpcResult<FileUploadValue> = withContext(Dispatchers.IO) {
-        val sid = currentSessionId.value
+        val sid = targetSessionId
             ?: return@withContext RpcResult.Err(RpcError("internal", "no open session"))
-        val api = apiOrNull()
+        val api = apiForHost(targetHost)
             ?: return@withContext RpcResult.Err(RpcError("internal", "not connected"))
         val stream = open()
             ?: return@withContext RpcResult.Err(RpcError("internal", "could not read the file"))
@@ -1484,9 +1509,9 @@ class SessionStore @Inject constructor(
         ).also { onProgress(bytes.size.toLong()) }
     }
 
-    private suspend fun promptContent(mode: String, content: List<PromptContentPart>): PromptOutcome {
-        val sid = currentSessionId.value ?: return PromptOutcome.Failed("no open session")
-        val api = apiOrNull() ?: return PromptOutcome.Failed("not connected")
+    private suspend fun promptContent(mode: String, content: List<PromptContentPart>, targetSessionId: String?, targetHost: String?): PromptOutcome {
+        val sid = targetSessionId ?: return PromptOutcome.Failed("no open session")
+        val api = apiForHost(targetHost) ?: return PromptOutcome.Failed("not connected")
         val safeMode = if (mode == "steer") "steer" else "queue"
         val zone = TimeZone.getDefault().id
         val request = SessionPromptRequest(
@@ -1520,17 +1545,18 @@ class SessionStore @Inject constructor(
         }
     }
 
-    suspend fun updateQueue(itemId: String, action: String, contentText: String? = null) {
-        val sid = currentSessionId.value ?: return
-        val api = apiOrNull() ?: return
+    suspend fun updateQueue(itemId: String, action: String, contentText: String? = null, sessionId: String? = currentSessionId.value): Boolean {
+        if (action == "edit" && contentText.isNullOrBlank()) return false
+        val sid = sessionId ?: return false
+        val api = apiOrNull() ?: return false
         val queueAction: QueueAction = when (action) {
             "remove" -> QueueAction.Remove()
             "steer" -> QueueAction.Steer()
             else -> QueueAction.Edit(listOf(ContentBlock.Text(contentText.orEmpty())))
         }
-        when (val r = api.sessionUpdateQueue(SessionUpdateQueueRequest(sid, itemId, queueAction))) {
-            is RpcResult.Ok -> Unit
-            is RpcResult.Err -> setConnectionError(r.error.message)
+        return when (val r = api.sessionUpdateQueue(SessionUpdateQueueRequest(sid, itemId, queueAction))) {
+            is RpcResult.Ok -> true
+            is RpcResult.Err -> { setConnectionError(r.error.message); false }
         }
     }
 
@@ -1690,9 +1716,9 @@ class SessionStore @Inject constructor(
         }
     }
 
-    suspend fun fetchAttachment(attachmentId: String): ByteArray? {
-        val sid = currentSessionId.value ?: return null
-        val api = apiOrNull() ?: return null
+    suspend fun fetchAttachment(attachmentId: String, sessionId: String? = currentSessionId.value, host: String? = activeHostKey): ByteArray? {
+        val sid = sessionId ?: return null
+        val api = host?.let(::apiForHost) ?: return null
         return when (val r = api.sessionAttachment(SessionAttachmentRequest(sid, attachmentId))) {
             is RpcResult.Ok -> runCatching { Base64.decode(r.value.data, Base64.DEFAULT) }.getOrNull()
             is RpcResult.Err -> {
@@ -1727,21 +1753,22 @@ class SessionStore @Inject constructor(
         }
     }
 
-    suspend fun promptSubagent(childSessionId: String, text: String) {
-        val sid = currentSessionId.value ?: return
-        val api = apiOrNull() ?: return
+    suspend fun promptSubagent(childSessionId: String, text: String, delivery: String = "queue"): Boolean {
+        val sid = currentSessionId.value ?: return false
+        val api = apiOrNull() ?: return false
         val zone = TimeZone.getDefault().id
         val request = SubagentPromptRequest(
             requestId = newPromptRequestId(),
             parentSessionId = sid,
             childSessionId = childSessionId,
             mode = "continuable",
+            delivery = delivery,
             content = listOf(PromptContentPart.Text(text)),
             clientTimeZone = zone,
         )
-        when (val r = api.subagentPrompt(request)) {
-            is RpcResult.Ok -> Unit
-            is RpcResult.Err -> setConnectionError(r.error.message)
+        return when (val r = api.subagentPrompt(request)) {
+            is RpcResult.Ok -> true
+            is RpcResult.Err -> { setConnectionError(r.error.message); false }
         }
     }
 
@@ -1760,38 +1787,47 @@ class SessionStore @Inject constructor(
             log("subagent $childSessionId has no readable transcript mode")
             return
         }
-        // `subagents/history` is gone: one address protocol covers ordinary sessions and direct
-        // children alike, so a child transcript is an ordinary page read against a subagent
-        // address. It needs a follow cursor like any other page, and this surface has no stream of
-        // its own — so it reads at the parent's current cut, which is the same log the child's
-        // events are sequenced in.
-        val cursor = synchronized(lock) { followCursor }
-        if (cursor == null) {
-            _subagentConversation.value = null
-            log("cannot read subagent $childSessionId: no follow cursor yet")
-            return
-        }
-        val request = SessionPageRequest(
-            address = SessionAddress.Subagent(
-                parentSessionId = sid,
-                childSessionId = childSessionId,
-                mode = mode,
-            ),
-            throughSeq = cursor,
-            maxMessages = HISTORY_PAGE_SIZE,
+        childFollowJob?.cancel()
+        _subagentConversation.value = null
+        val host = activeHostKey ?: return
+        val mux = muxForHost(host) ?: return
+        val request = SessionFollowRequest(
+            address = SessionAddress.Subagent(parentSessionId = sid, childSessionId = childSessionId, mode = mode),
+            maxMessages = HISTORY_PAGE_SIZE, assistantStream = true,
         )
-        when (val r = api.sessionPage(request)) {
-            is RpcResult.Ok -> {
-                val envelopes = expandRecords(r.value.records)
-                _subagentConversation.value = EventFold(childSessionId).fold(envelopes)
-                    .copy(hasMore = r.value.hasMore)
-            }
-            is RpcResult.Err -> {
-                _subagentConversation.value = null
-                setConnectionError(r.error.message)
-            }
+        childFollowJob = scope.launch {
+            val events = mutableListOf<SessionEventEnvelope>()
+            val live = AssistantLiveState()
+            var hasMore = false
+            try {
+                mux.openStream("session/follow", buildJsonObject {
+                    put("request", encodeToJsonElement(SessionFollowRequest.serializer(), request))
+                }).collect { item ->
+                    if (activeHostKey != host || currentSessionId.value != sid) return@collect
+                    when (val frame = decodeOrNull(SessionFollowFrameSerializer, item)) {
+                        is SessionFollowFrame.Snapshot -> {
+                            events.clear()
+                            events.addAll(expandRecords(frame.records))
+                            live.seed(frame.assistantStream)
+                            hasMore = frame.hasMore
+                        }
+                        is SessionFollowFrame.Entry -> expandRecords(listOf(frame.record)).forEach { event ->
+                            if (events.none { it.seq == event.seq }) events.add(event)
+                            val data = event.data as? JsonObject
+                            live.acceptDurable(event.type, data?.get("turn")?.jsonPrimitive?.intOrNull,
+                                data?.get("step")?.jsonPrimitive?.intOrNull, event.seq, event.surfaceOp)
+                        }
+                        is SessionFollowFrame.AssistantStream -> live.accept(frame.frame)
+                        null -> Unit
+                    }
+                    _subagentConversation.value = EventFold(childSessionId).fold(events.sortedBy { it.seq }, live.transientEnvelopes()).copy(hasMore = hasMore)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (failure: Exception) { setConnectionError(failure.message) }
         }
     }
+
+    fun closeSubagentTranscript() { childFollowJob?.cancel(); childFollowJob = null }
 
     suspend fun createWorkspace(path: String) {
         val api = apiOrNull() ?: return
@@ -1902,9 +1938,11 @@ class SessionStore @Inject constructor(
     suspend fun runCommand(
         line: String,
         attachments: List<CommandSubmitAttachment> = emptyList(),
+        targetSessionId: String? = currentSessionId.value,
+        targetHost: String? = activeHostKey,
     ): CommandOutcome {
-        val sid = currentSessionId.value ?: return CommandOutcome.Failed("no open session")
-        val api = apiOrNull() ?: return CommandOutcome.Failed("not connected")
+        val sid = targetSessionId ?: return CommandOutcome.Failed("no open session")
+        val api = apiForHost(targetHost) ?: return CommandOutcome.Failed("not connected")
         return when (val r = api.commandsExecute(sid, line, attachments)) {
             is RpcResult.Ok -> {
                 val execution = r.value as? JsonObject
@@ -2103,6 +2141,27 @@ class SessionStore @Inject constructor(
      * consult if a future release makes it conditional again.
      */
     val commandAttachmentsSupported: Boolean get() = connectionManager.connectedApi != null
+
+    suspend fun refreshPermissionCatalog() {
+        val epoch = ++permissionCatalogEpoch
+        val key = activeHostKey
+        val api = apiForHost(key) ?: return
+        permissionCatalog.value = null
+        val result = api.permissionCatalog()
+        if (epoch == permissionCatalogEpoch && key == activeHostKey) {
+            permissionCatalog.value = (result as? RpcResult.Ok)?.value
+        }
+    }
+
+    suspend fun unarchiveSession(sessionId: String): Boolean {
+        val key = activeHostKey
+        val result = apiForHost(key)?.workspaceUnarchiveSession(sessionId) ?: return false
+        if (key != activeHostKey) return false
+        return when (result) {
+            is RpcResult.Ok -> { setArchived(result.value.archivedSessionIds); refreshSessions(); true }
+            is RpcResult.Err -> { setConnectionError(result.error.message); false }
+        }
+    }
 
     private fun apiOrNull(): DshApiClient? {
         val api = connectionManager.connectedApi

@@ -34,6 +34,7 @@ fun formatDurationMs(ms: Long?): String = when {
     ms == null -> "—"
     ms < 1_000 -> "${ms}ms"
     ms < 60_000 -> String.format(java.util.Locale.US, "%.1fs", ms / 1000.0)
+    ms >= 3_600_000 -> String.format(java.util.Locale.US, "%d:%02d:%02d", ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60)
     else -> {
         val totalSeconds = ms / 1000
         String.format(java.util.Locale.US, "%d:%02d", totalSeconds / 60, totalSeconds % 60)

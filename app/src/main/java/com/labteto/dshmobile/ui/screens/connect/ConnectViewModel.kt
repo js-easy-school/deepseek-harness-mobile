@@ -499,6 +499,13 @@ class ConnectViewModel @Inject constructor(
                 config = paired,
             )
             if (outcome !is ProbeOutcome.Reachable) {
+                // Authentication happens before a successful probe. Remember the exact attempted
+                // authority so a first-time host can exchange its launch token from the dialog.
+                if (outcome is ProbeOutcome.Unauthenticated && paired == null) {
+                    val target = hostsStore.rememberHost(name = input.host, host = input.host,
+                        port = portInt, isLoopback = isLoopback, useTls = useTls)
+                    _state.update { it.copy(remembered = it.remembered.filterNot { h -> h.id == target.id } + target) }
+                }
                 fail(ConnectFailure.from(outcome, relay = paired != null), authority)
                 return@launch
             }

@@ -57,6 +57,9 @@ fun sessionEventToEnvelope(event: SessionEvent): SessionEventEnvelope {
         time = event.time,
         data = data,
         surfaceOp = surfaceOp,
+        surfaceIntent = event.surfaceOp,
+        sourceEventSeqs = event.sourceEventSeqs,
+        ignorable = event.ignorable,
     )
 }
 

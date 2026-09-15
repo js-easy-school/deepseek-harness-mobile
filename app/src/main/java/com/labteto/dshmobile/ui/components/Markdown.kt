@@ -22,6 +22,9 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +44,8 @@ import com.labteto.dshmobile.ui.theme.DsShapes
 import com.labteto.dshmobile.ui.theme.DsTheme
 import com.labteto.dshmobile.ui.theme.DsType
 import com.labteto.dshmobile.ui.theme.DshTheme
+
+val LocalFileOpener = staticCompositionLocalOf<(String) -> Unit> { {} }
 
 /**
  * Block-level Markdown renderer: fenced code blocks, #-#### headings, bullet and
@@ -270,10 +275,16 @@ private fun InlineMarkdown(text: String, style: TextStyle, modifier: Modifier = 
     val result = remember(text, style, codeStyle, colors) {
         buildInlineContent(text, codeStyle, colors)
     }
-    BasicText(
-        result,
-        modifier = modifier,
-        style = style,
+    val openFile = LocalFileOpener.current
+    val uriHandler = LocalUriHandler.current
+    ClickableText(
+        result, modifier = modifier, style = style,
+        onClick = { offset ->
+            result.getStringAnnotations("url", offset, offset).firstOrNull()?.item?.let { url ->
+                if (url.startsWith("https://") || url.startsWith("http://")) runCatching { uriHandler.openUri(url) }
+                else com.labteto.dshmobile.ui.screens.main.previewPath(url)?.let(openFile)
+            }
+        },
     )
 }
 
@@ -292,8 +303,9 @@ private fun buildInlineContent(
                 SpanStyle(fontFamily = codeStyle.fontFamily, color = codeStyle.color),
             ) { append(segment.text) }
             is InlineSegment.Link -> {
-                // v1 renders links as accent-colored text (no click-through).
+                builder.pushStringAnnotation("url", segment.url)
                 builder.withStyle(SpanStyle(color = colors.accent)) { append(segment.text) }
+                builder.pop()
             }
         }
     }

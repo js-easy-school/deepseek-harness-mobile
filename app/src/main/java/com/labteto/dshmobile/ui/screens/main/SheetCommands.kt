@@ -165,7 +165,13 @@ internal fun CommandSheet(
             else -> LazyColumn(Modifier.heightIn(max = 260.dp)) {
                 items(filteredCommands, key = { it.name }) { command ->
                     SheetRow(
-                        title = command.line,
+                        title = when (command.name) {
+                            "goal" -> stringResource(R.string.goal_title)
+                            "plan" -> stringResource(R.string.plan_mode_title)
+                            "export" -> stringResource(R.string.chat_export)
+                            "feedback" -> stringResource(R.string.feedback_send)
+                            else -> command.line
+                        },
                         subtitle = command.description.ifBlank { null },
                         trailing = command.input?.hint,
                         onClick = {
@@ -270,6 +276,6 @@ private inline fun <T> List<T>.filterByQuery(query: String, selector: (T) -> Pai
     if (needle.isEmpty()) return this
     return filter { item ->
         val (name, description) = selector(item)
-        name.lowercase().contains(needle) || description.lowercase().contains(needle)
+        fuzzyContains(name, needle) || description.lowercase().contains(needle)
     }
 }

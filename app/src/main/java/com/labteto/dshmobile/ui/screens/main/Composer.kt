@@ -43,6 +43,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.input.key.*
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -160,13 +162,14 @@ internal fun Composer(
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    preparing: Boolean = false,
 ) {
     val colors = DsTheme.colors
     val haptics = LocalHapticFeedback.current
     // A file that is still uploading has no receipt to cite yet, and one that failed never will;
     // the send affordance waits for the chips rather than sending a message that names neither.
     val attachmentsSettled = attachments.none { it is PendingAttachment.File && it.state !is FileUploadState.Ready }
-    val canSend = enabled && (draft.isNotBlank() || attachments.isNotEmpty()) && attachmentsSettled
+    val canSend = enabled && !preparing && (draft.isNotBlank() || attachments.isNotEmpty()) && attachmentsSettled
     val currentDraft by rememberUpdatedState(draft)
     val currentOnDraftChange by rememberUpdatedState(onDraftChange)
     val currentOnSend by rememberUpdatedState(onSend)
@@ -187,7 +190,19 @@ internal fun Composer(
             TextField(
                 value = draft,
                 onValueChange = onDraftChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+                    if (event.key == Key.Enter && (event.isCtrlPressed || event.isMetaPressed)) {
+                        if (event.type == KeyEventType.KeyUp && canSend) {
+                            val text = currentDraft
+                            currentOnDraftChange("")
+                            currentOnSend(text)
+                        }
+                        true
+                    } else false
+                },
+                keyboardActions = KeyboardActions(onSend = {
+                    if (canSend) { val text = currentDraft; currentOnDraftChange(""); currentOnSend(text) }
+                }),
                 enabled = enabled,
                 placeholder = {
                     Text(
@@ -212,6 +227,7 @@ internal fun Composer(
                 ),
             )
 
+            if (preparing) Text(stringResource(R.string.photos_preparing), style = DsType.caption11)
             AnimatedVisibility(visible = attachments.isNotEmpty()) {
                 AttachmentStrip(attachments, onRemoveAttachment, onRetryAttachment)
             }
