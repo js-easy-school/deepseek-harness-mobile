@@ -108,4 +108,22 @@ class CompletionClassifierTest {
         // Second stop does not refire.
         assertNull(classifier.classifyNotification("api-session/status", stopped))
     }
+
+    @Test
+    fun consecutiveIdlesGetDistinctDedupKeys() {
+        // The status notification carries no seq, so the classifier counts running→idle
+        // transitions itself; a constant would let the observer's dedup silence every
+        // completion after the first.
+        val started = listOf(JsonPrimitive("s1"), JsonPrimitive(true))
+        val stopped = listOf(JsonPrimitive("s1"), JsonPrimitive(false))
+
+        classifier.classifyNotification("api-session/status", started)
+        val first = classifier.classifyNotification("api-session/status", stopped)
+        classifier.classifyNotification("api-session/status", started)
+        val second = classifier.classifyNotification("api-session/status", stopped)
+
+        assertTrue(first is CompletionEvent.SessionIdle)
+        assertTrue(second is CompletionEvent.SessionIdle)
+        assertTrue(first!!.dedupKey != second!!.dedupKey)
+    }
 }

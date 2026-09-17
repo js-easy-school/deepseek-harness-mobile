@@ -62,6 +62,14 @@ sealed interface CompletionEvent {
 class CompletionClassifier {
     private val running = mutableSetOf<String>()
 
+    /**
+     * Per-session count of running→idle transitions, used as [CompletionEvent.SessionIdle]'s
+     * seq. The status notification carries no sequence of its own, and a constant would make
+     * every completion after the first dedup against it downstream — only the first idle per
+     * session would ever notify.
+     */
+    private val idleTransitions = mutableMapOf<String, Long>()
+
     fun classifyEvent(sessionId: String, event: SessionEventEnvelope): CompletionEvent? {
         val data = event.data as? JsonObject
         return when (event.type) {
@@ -156,7 +164,10 @@ class CompletionClassifier {
             return null
         }
         running.remove(sessionId)
-        return if (wasRunning) CompletionEvent.SessionIdle(sessionId, 0L) else null
+        if (!wasRunning) return null
+        val transition = (idleTransitions[sessionId] ?: 0L) + 1
+        idleTransitions[sessionId] = transition
+        return CompletionEvent.SessionIdle(sessionId, transition)
     }
 
     fun markSessionRunning(sessionId: String) {

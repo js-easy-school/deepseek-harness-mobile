@@ -59,7 +59,7 @@
     <string name="connect_fail_dns">Ни одно устройство в этой сети не отвечает на “%1$s”. Используйте IP-адрес компьютера — его покажет ipconfig в Windows, ip addr в Linux или ifconfig в macOS.</string>
     <string name="connect_fail_not_harness">На %1$s что-то ответило, но это не DeepSeek Harness. Проверьте порт, который harness вывел при запуске.</string>
     <string name="connect_fail_tls">%1$s ответил, но защищённое (HTTPS) соединение не удалось. Если ваш прокси использует локальный центр сертификации, установите его CA-сертификат на этот телефон — а если адрес на самом деле не работает по HTTPS, подключайтесь без https://.</string>
-    <string name="connect_fail_streams">%1$s ответил, но поток событий не открылся. VPN или прокси частного DNS на этом телефоне может блокировать WebSocket — отключите и повторите.</string>
+    <string name="connect_fail_streams">%1$s ответил, но поток событий не открылся. VPN или прокси частного DNS на этом телефоне может блокировать WebSocket — отключите и повторите. Android также мог заморозить само приложение сразу после запуска — принудительно остановите его и повторите попытку.</string>
     <string name="connect_fail_other">Не удалось подключиться к %1$s. %2$s</string>
     <string name="connect_version_mismatch">Версия Harness %1$s может быть несовместима с этим приложением (создано для %2$s).</string>
     <string name="connect_harness_home">Домашний каталог %1$s</string>

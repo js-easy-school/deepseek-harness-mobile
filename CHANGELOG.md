@@ -3,6 +3,20 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.1] - 2026-09-17
+
+### Fixed
+
+- Completion notifications were suppressed for the whole process once a session had been
+  opened, because the open-session check never cleared. Suppression now applies only while
+  that session is open *and* the app is in the foreground; a backgrounded app notifies
+  again. (#19)
+- Only the first completion per session ever notified: the fallback `SessionIdle` signal
+  carried a constant sequence number, so later completions were discarded as duplicates.
+  Each running→idle transition now counts its own sequence. (#19)
+- The "event stream would not open" diagnosis now also suggests force-stopping the app —
+  Android can freeze it right after launch, which looks identical from here. (#19)
+
 ## [0.11.0] - 2026-09-15
 
 ### Added

@@ -59,7 +59,7 @@
     <string name="connect_fail_dns">لا يوجد جهاز على هذه الشبكة يستجيب لـ “%1$s”. استخدم عنوان IP للكمبيوتر — يظهره ipconfig على ويندوز أو ip addr على لينكس أو ifconfig على macOS.</string>
     <string name="connect_fail_not_harness">ردّ شيء على %1$s، لكنه ليس DeepSeek Harness. تحقق من المنفذ الذي طبعه عند بدء التشغيل.</string>
     <string name="connect_fail_tls">ردّ %1$s، لكن الاتصال الآمن (HTTPS) فشل. إذا كان الوكيل لديك يستخدم مرجع شهادات محليًا، فثبّت شهادة CA الخاصة به على هذا الهاتف — وإذا كان العنوان لا يقدّم HTTPS فعلًا، فاتصل من دون https://.</string>
-    <string name="connect_fail_streams">ردّ %1$s، لكن مسار الأحداث لم يُفتح. قد تحجب شبكة VPN أو وكيل DNS خاص اتصالات WebSocket — أوقفه ثم أعد المحاولة.</string>
+    <string name="connect_fail_streams">ردّ %1$s، لكن مسار الأحداث لم يُفتح. قد تحجب شبكة VPN أو وكيل DNS خاص اتصالات WebSocket — أوقفه ثم أعد المحاولة. وقد يجمّد Android التطبيق نفسه مباشرة بعد تشغيله — أوقف التطبيق إجباريًا ثم أعد المحاولة.</string>
     <string name="connect_fail_other">تعذّر الاتصال بـ %1$s. %2$s</string>
     <string name="connect_version_mismatch">قد يكون إصدار Harness %1$s غير متوافق مع هذا التطبيق (المبني للإصدار %2$s).</string>
     <string name="connect_harness_home">المجلد الرئيسي %1$s</string>

@@ -1,6 +1,9 @@
 package com.labteto.dshmobile.notify
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.os.Bundle
 import com.labteto.dshmobile.R
 import com.labteto.dshmobile.connection.AppSettings
 import com.labteto.dshmobile.connection.ConnectionManager
@@ -53,16 +56,54 @@ class NotificationObserver @Inject constructor(
     @Volatile
     private var started = false
 
+    /**
+     * Whether any activity is currently started. Suppression keys off "the user is looking
+     * at this session", which is the session being open *and* the app being in the
+     * foreground: `SessionStore.currentSessionId` never clears once set, so without this
+     * flag a session opened once would stay silenced for the rest of the process even
+     * while the app sits in the background.
+     */
+    @Volatile
+    private var appInForeground = false
+
     fun start() {
         if (started) return
         started = true
         notifications.ensureChannels()
+        trackAppForeground()
         scope.launch {
             hostsStore.settings.collect { settings = it }
         }
         scope.launch {
             connectionManager.eventFrames.collect { handleEventFrame(it) }
         }
+    }
+
+    /**
+     * Keep [appInForeground] in step with the activity stack. `start()` runs from
+     * `Application.onCreate`, before any activity exists, so counting start/stop pairs is
+     * exact from the first activity on.
+     */
+    private fun trackAppForeground() {
+        (context as? Application)?.registerActivityLifecycleCallbacks(
+            object : Application.ActivityLifecycleCallbacks {
+                private var startedActivities = 0
+
+                override fun onActivityStarted(activity: Activity) {
+                    if (++startedActivities == 1) appInForeground = true
+                }
+
+                override fun onActivityStopped(activity: Activity) {
+                    if (--startedActivities == 0) appInForeground = false
+                }
+
+                override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+                override fun onActivityResumed(activity: Activity) {}
+                override fun onActivityPaused(activity: Activity) {}
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+                override fun onActivityDestroyed(activity: Activity) {}
+            },
+        )
     }
 
     private fun handleEventFrame(frame: RemoteEventFrame) {
@@ -101,7 +142,8 @@ class NotificationObserver @Inject constructor(
 
     private fun maybeNotify(event: CompletionEvent) {
         if (!notifications.canPost()) return
-        if (store.isSessionOpen(event.sessionId)) return
+        // Suppress only the completion the user can already see happening.
+        if (appInForeground && store.isSessionOpen(event.sessionId)) return
 
         val spec = when (event) {
             is CompletionEvent.TurnComplete -> {

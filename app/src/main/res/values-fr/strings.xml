@@ -59,7 +59,7 @@
     <string name="connect_fail_dns">Aucun appareil de ce réseau ne répond à “%1$s”. Utilisez plutôt l\'adresse IP de l\'ordinateur — trouvez-la avec ipconfig sous Windows, ip addr sous Linux ou ifconfig sous macOS.</string>
     <string name="connect_fail_not_harness">Quelque chose a répondu à %1$s, mais ce n\'est pas un DeepSeek Harness. Vérifiez le port affiché par le harness au démarrage.</string>
     <string name="connect_fail_tls">%1$s a répondu, mais la connexion sécurisée (HTTPS) a échoué. Si votre proxy utilise une autorité de certification locale, installez son certificat CA sur ce téléphone — et si l\'adresse ne propose pas réellement HTTPS, connectez-vous sans https://.</string>
-    <string name="connect_fail_streams">%1$s a répondu, mais son flux d\'événements ne s\'est pas ouvert. Un VPN ou un proxy DNS privé sur ce téléphone peut bloquer les connexions WebSocket — désactivez-le et réessayez.</string>
+    <string name="connect_fail_streams">%1$s a répondu, mais son flux d\'événements ne s\'est pas ouvert. Un VPN ou un proxy DNS privé sur ce téléphone peut bloquer les connexions WebSocket — désactivez-le et réessayez. Android peut aussi figer l\'application elle-même juste après son lancement — forcez son arrêt et réessayez.</string>
     <string name="connect_fail_other">Impossible de se connecter à %1$s. %2$s</string>
     <string name="connect_version_mismatch">La version %1$s du Harness peut être incompatible avec cette application (conçue pour %2$s).</string>
     <string name="connect_harness_home">Dossier personnel %1$s</string>
