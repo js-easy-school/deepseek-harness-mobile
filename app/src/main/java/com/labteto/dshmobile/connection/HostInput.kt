@@ -1,5 +1,7 @@
 package com.labteto.dshmobile.connection
 
+import com.labteto.dshmobile.core.wire.authorityOf
+
 /**
  * What the connect form's host field actually said.
  *
@@ -80,8 +82,7 @@ private fun String.toValidPort(): Int? = toIntOrNull()?.takeIf { it in 1..65535 
  * `host:port` as a URL requires it — an IPv6 literal goes back into brackets. The display
  * authority everywhere else stays bare; this form is only for building URLs.
  */
-internal fun urlAuthority(host: String, port: Int): String =
-    if (':' in host) "[$host]:$port" else "$host:$port"
+internal fun urlAuthority(host: String, port: Int): String = authorityOf(host, port)
 
 /** The scheme-qualified base URL for one harness endpoint. */
 internal fun harnessBaseUrl(host: String, port: Int, useTls: Boolean): String =

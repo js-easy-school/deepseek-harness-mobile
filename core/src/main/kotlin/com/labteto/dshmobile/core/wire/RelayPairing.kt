@@ -171,8 +171,14 @@ object RelayPairing {
         return RelayOrigin.Here(originOf(target), target.scheme == "https")
     }
 
-    /** Scheme, host and port of [url], with no path — the form every other call takes. */
-    private fun originOf(url: okhttp3.HttpUrl): String = "${url.scheme}://${url.host}:${url.port}"
+    /**
+     * Scheme, host and port of [url], with no path — the form every other call takes.
+     *
+     * Through [authorityOf], because `HttpUrl.host` is unbracketed: an IPv6 origin spelled straight
+     * would not parse back as a URL, and every consumer of a [RelayOrigin] parses it again.
+     */
+    private fun originOf(url: okhttp3.HttpUrl): String =
+        "${url.scheme}://" + authorityOf(url.host, url.port)
 
     /** Resolve [path] against a relay origin, or null when the origin is not a usable URL. */
     private fun relayUrl(baseUrl: String, path: String) =

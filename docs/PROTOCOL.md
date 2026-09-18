@@ -308,9 +308,13 @@ history without following first.
 {"type":"event","event":{"type":"turn/end","seq":4,"time":5,"data":{…},"ignorable":true}}
 ```
 
-Through 0.1.2 a record could also be a packed `chunks` run of assistant deltas.
-Session format v2 has nothing to pack: the deltas are not durable events any
-more (below), so the record class is gone and every record reads as an event.
+Through 0.1.2 a record could also be a packed `chunks` run of assistant deltas,
+carrying the run's first `seq` and the inter-row time gaps. Session format v2 has
+nothing to pack — the deltas are not durable events any more (below) — so a 0.1.3
+or later host never sends one. This client still *reads* the packed class and
+expands it back into one `assistant/chunk` per member: read as a single event a
+run swallows the sequence numbers of everything after its first, and the hole
+that leaves reads as a gapped journal.
 An `ignorable: true` marks an informational event a reader that does not
 recognise its `type` may skip; this client renders unknown events as passthrough
 rows either way.

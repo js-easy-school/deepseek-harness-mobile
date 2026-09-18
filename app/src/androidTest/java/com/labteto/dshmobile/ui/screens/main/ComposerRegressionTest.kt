@@ -46,6 +46,39 @@ class ComposerRegressionTest {
         }
     }
 
+    /**
+     * A running turn must still offer a way to send: that is the whole of issue #23. Send and stop
+     * used to share one slot, so a running session showed only stop and the Queue/Steer modes were
+     * unreachable from a touch keyboard.
+     */
+    @Test fun sendStaysAvailableBesideStopWhileATurnRuns() {
+        var text by mutableStateOf("")
+        var running by mutableStateOf(true)
+        val sent = mutableListOf<String>()
+        var stops = 0
+        compose.setContent {
+            DshTheme { Composer(text, { text = it }, emptyList(), {}, {}, null, null, {}, null, null,
+                running = running, enabled = true, onOpenSheet = {}, onStop = { stops++ },
+                onSend = { sent.add(it) }) }
+        }
+        val send = context.getString(R.string.chat_composer_send)
+        val stop = context.getString(R.string.chat_composer_stop)
+
+        // Both affordances are present mid-turn, and send waits for something to send.
+        compose.onNodeWithContentDescription(stop).assertExists()
+        compose.onNodeWithContentDescription(send).assertIsNotEnabled()
+
+        compose.runOnIdle { text = "queue this" }
+        compose.onNodeWithContentDescription(send).performClick()
+        compose.runOnIdle { assertEquals(listOf("queue this"), sent) }
+
+        // Stop still stops, and is the only one of the two that leaves when the turn ends.
+        compose.onNodeWithContentDescription(stop).performClick()
+        compose.runOnIdle { assertEquals(1, stops); running = false }
+        compose.onNodeWithContentDescription(stop).assertDoesNotExist()
+        compose.onNodeWithContentDescription(send).assertExists()
+    }
+
     @Test fun rejectedSendRestoresOriginWithoutDroppingNewAttachments() {
         val repository = ComposerRepository()
         val original = repository.get(ComposerKey("host-a", "session"))

@@ -8,7 +8,8 @@ checked against.
 
 | DSH Mobile | Harness version | Status |
 |---|---|---|
-| 0.11.0 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Current target; see [validation](VALIDATION-0.11.0.md) |
+| 0.11.1 – 0.11.2 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Current target |
+| 0.11.0 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | See [validation](VALIDATION-0.11.0.md) |
 | 0.10.1 | 0.1.3-alpha.1 | Previous baseline |
 | 0.10.0 | 0.1.3-alpha.1 | |
 | 0.9.3 | 0.1.2-alpha.1 | Previous baseline — no streaming on 0.1.3, commands refused |
@@ -51,6 +52,7 @@ mounted beside the harness rather than part of it.
 
 | DSH Mobile | [dsh-relay](https://github.com/sorsama/deepseek-harness-relay) | Notes |
 |---|---|---|
+| 0.11.0 – 0.11.2 | 0.2.1 | As 0.10.x. From 0.11.2 the `Host` header brackets an IPv6 literal, without which the relay's fence refuses every `/api` call as `unparsable-host` |
 | 0.10.0 – 0.10.1 | 0.2.1 | Pairing payload `v: 1`; mDNS TXT `v: 1`. File uploads need the relay to proxy `/api/session/uploadFileBinary`, or the app falls back to the `fileUploads/upload` Remote |
 | 0.9.2 – 0.9.3 | 0.2.1 | |
 | 0.9.1 | 0.2.1 | |
@@ -112,9 +114,10 @@ shapes; this is the summary.
 - **No durable deltas.** `assistant/chunk` is gone from the log. Each model
   attempt settles as one event — an `assistant/message` when it produced a
   surface message, a new log-only `assistant/attempt` when it did not — and the
-  settlement embeds the exact compact stream the attempt produced. The packed
-  `chunks` history record 0.1.2 introduced is gone with it: there is nothing
-  left to pack.
+  settlement embeds the exact compact stream the attempt produced. A 0.1.3 host
+  no longer sends the packed `chunks` history record 0.1.2 introduced, because
+  there is nothing left to pack; the app still reads that record when a 0.1.2
+  host sends one, since misreading it opens a sequence gap.
 - **Streaming is opt-in and process-local.** A `session/follow` request that
   sets `assistantStream: true` receives `assistant-stream` frames (`start`,
   `chunk`, `end`) beside the durable events, and its opening snapshot carries an

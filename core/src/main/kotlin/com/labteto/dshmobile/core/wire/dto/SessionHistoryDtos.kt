@@ -33,8 +33,9 @@ import kotlinx.serialization.json.jsonPrimitive
  * generation's opening cursor. See [SessionPageRequest].
  *
  * Harness 0.1.3 changed what those two carry. Session format v2 keeps one durable settlement per
- * model attempt instead of one event per token, so the packed `chunks` history record that 0.1.2
- * introduced is gone along with the `assistant/chunk` events it packed. Live deltas are no longer
+ * model attempt instead of one event per token, so a 0.1.3 host no longer emits the packed
+ * `chunks` history record that 0.1.2 introduced, nor the `assistant/chunk` events it packed. Both
+ * are still *read* — see [SessionHistoryRecord.Chunks]. Live deltas are no longer
  * durable at all: a follower that wants them opts in with [SessionFollowRequest.assistantStream]
  * and receives them as [SessionFollowFrame.AssistantStream] frames, which are process-local
  * presentation and never replayed from the log.
@@ -119,20 +120,23 @@ data class SessionWireEvent(
 )
 
 /**
- * One history record.
+ * One history record: either a raw event or a packed run of consecutive assistant deltas.
  *
- * Since harness 0.1.3 there is exactly one record class: an ordinary event. The packed `chunks`
- * run of 0.1.2 is gone because format v2 has nothing left to pack — the per-token deltas it
- * compressed are no longer durable events; each model attempt is one settlement event that embeds
- * its own compact stream. The sealed shape is kept so a future record class still decodes as an
- * event rather than dropping and opening a sequence gap.
+ * A 0.1.3 or later host only ever sends the ordinary event class. Format v2 has nothing left to
+ * pack — the per-token deltas `chunks` compressed are no longer durable events; each model attempt
+ * is one settlement that embeds its own compact stream.
+ *
+ * The packed class is still read, because a 0.1.2 host is still out there and misreading its rows
+ * is worse than not talking to it at all. `seq` and `time` on a run identify its *first* member,
+ * so a run read as one event silently swallows the rest of the run's sequence numbers and leaves
+ * the journal looking gapped. See [com.labteto.dshmobile.core.session.ChunkRows].
  */
 @Serializable(with = SessionHistoryRecordSerializer::class)
 sealed class SessionHistoryRecord {
-    /** The wire discriminant; `event` is the only value a 0.1.3 host sends. */
+    /** The wire discriminant: `event`, or `chunks` from a 0.1.2 host. */
     abstract val type: String
 
-    /** The inner event. */
+    /** The inner event-shaped value; aligned `type`/`seq`/`time`/`data` in both variants. */
     abstract val event: SessionWireEvent
 
     /** One ordinary logical event. */
@@ -141,9 +145,22 @@ sealed class SessionHistoryRecord {
         @SerialName("type") override val type: String = "event",
         @SerialName("event") override val event: SessionWireEvent,
     ) : SessionHistoryRecord()
+
+    /**
+     * One lossless run of consecutive same-block assistant delta events, from a 0.1.2 host.
+     *
+     * The inner `event.type` is `chunkrow/text-chunks`, `chunkrow/reasoning-chunks`, or
+     * `chunkrow/tool-call-chunks`; `seq` and `time` identify the run's *first* member, and the
+     * rest are reconstructed by [com.labteto.dshmobile.core.session.ChunkRows].
+     */
+    @Serializable
+    data class Chunks(
+        @SerialName("type") override val type: String = "chunks",
+        @SerialName("event") override val event: SessionWireEvent,
+    ) : SessionHistoryRecord()
 }
 
-/** Custom serializer for [SessionHistoryRecord]; every record class reads as an event. */
+/** Custom `type`-dispatching serializer for [SessionHistoryRecord]. */
 object SessionHistoryRecordSerializer : KSerializer<SessionHistoryRecord> {
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor("SessionHistoryRecord") {
         element("type", buildSerialDescriptor("kotlin.String", PrimitiveKind.STRING))
@@ -153,17 +170,22 @@ object SessionHistoryRecordSerializer : KSerializer<SessionHistoryRecord> {
         val json = when (value) {
             is SessionHistoryRecord.Event ->
                 encodeToJsonElement(SessionHistoryRecord.Event.serializer(), value)
+            is SessionHistoryRecord.Chunks ->
+                encodeToJsonElement(SessionHistoryRecord.Chunks.serializer(), value)
         }
         (encoder as JsonEncoder).encodeJsonElement(json)
     }
 
     override fun deserialize(decoder: Decoder): SessionHistoryRecord {
         val json = (decoder as JsonDecoder).decodeJsonElement().jsonObject
-        // An unrecognised record class is read as an ordinary event rather than dropped: the
-        // outer discriminator only names the class, and the inner value is shaped the same either
-        // way. Dropping it would open a sequence gap and send the journal into a repair it cannot
-        // resolve.
-        return decodeFromJsonElement(SessionHistoryRecord.Event.serializer(), json)
+        return when (json["type"]?.jsonPrimitive?.contentOrNull ?: "") {
+            "chunks" -> decodeFromJsonElement(SessionHistoryRecord.Chunks.serializer(), json)
+            // An unrecognised record class is read as an ordinary event rather than dropped: the
+            // outer discriminator only selects how to expand the inner value, and the inner value
+            // is shaped the same either way. Dropping it would open a sequence gap and send the
+            // journal into a repair it cannot resolve.
+            else -> decodeFromJsonElement(SessionHistoryRecord.Event.serializer(), json)
+        }
     }
 }
 

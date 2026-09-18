@@ -8,6 +8,9 @@ import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -87,8 +90,7 @@ private val JSON_MEDIA_TYPE: MediaType = "application/json; charset=utf-8".toMed
  * from the base URL, and times out at [connectTimeoutMs]/[readTimeoutMs] (30s by default). Non-2xx
  * responses throw [RpcTransportException] (403 mentions the harness trust fence).
  *
- * [baseUrl] may be `http://` or `https://`; the `Host` header omits the port when it is the
- * scheme's default, which is what a relay behind a name on :443 needs.
+ * [baseUrl] may be `http://` or `https://`; see [hostHeaderFor] for how the header is spelled.
  *
  * The timeouts are constructor parameters rather than something a caller pre-applies to [client]:
  * this class rebuilds the client it is handed, so a builder-applied deadline was silently replaced
@@ -109,14 +111,7 @@ class OkHttpRpcTransport(
 ) : RpcTransport {
 
     private val base: HttpUrl = baseUrl.toHttpUrl()
-    private val hostHeader: String = run {
-        val defaultPort = when (base.scheme) {
-            "http" -> 80
-            "https" -> 443
-            else -> -1
-        }
-        if (base.port == defaultPort) base.host else "${base.host}:${base.port}"
-    }
+    private val hostHeader: String = hostHeaderFor(base)
     private val httpClient: OkHttpClient = client.newBuilder()
         .connectTimeout(connectTimeoutMs, TimeUnit.MILLISECONDS)
         .readTimeout(readTimeoutMs, TimeUnit.MILLISECONDS)
@@ -153,7 +148,7 @@ class OkHttpRpcTransport(
                             continuation.resume(RpcHttpResponse(resp.code, responseBody))
                         } else {
                             continuation.resumeWithException(
-                                RpcTransportException(resp.code, carrierMessage(resp.code)),
+                                RpcTransportException(resp.code, carrierMessage(resp.code, responseBody)),
                             )
                         }
                     }
@@ -284,20 +279,61 @@ internal fun Request.Builder.cookied(cookie: String?): Request.Builder =
     if (cookie == null) this else header("Cookie", cookie)
 
 /**
+ * The `Host` header for requests against [base].
+ *
+ * The port is omitted when it is the scheme's default, which is what a relay behind a name on :443
+ * needs. An IPv6 literal is bracketed: [HttpUrl.host] hands back the canonical *unbracketed* host
+ * (`http://[::1]:3080` → `::1`), and writing that into a header straight makes the address's own
+ * colons read as a port separator. Both dsh-relay's fence and the harness's `isTrustedApiRequest`
+ * parse `Host` with `new URL("http://" + host)`, which throws on the unbracketed form — so on an
+ * IPv6-only network every `/api` call came back refused while pairing, health and the WebSocket
+ * upgrade all worked, because nothing but this sets the header by hand.
+ */
+internal fun hostHeaderFor(base: HttpUrl): String {
+    val defaultPort = when (base.scheme) {
+        "http" -> 80
+        "https" -> 443
+        else -> -1
+    }
+    val literal = if (':' in base.host) "[${base.host}]" else base.host
+    return if (base.port == defaultPort) literal else "$literal:${base.port}"
+}
+
+/**
  * Carrier-layer failure text; 403 names the trust fence because that is the usual cause.
  *
  * File-level so the WebSocket path can wrap a failed upgrade in the same shape as a failed POST —
  * a fence rejection of `/api/events.mux` is the same fact as one on `/api/host.describe`.
  */
-internal fun carrierMessage(status: Int): String = when (status) {
+internal fun carrierMessage(status: Int, body: String? = null): String = when (status) {
     // Since 0.1.2 these are two different facts and the connect screen has to say which. 403 is
     // the Host/Origin fence, which runs first and is about *where* the request came from. 401 is
     // the browser session, which is about *who* is asking — a harness that would answer happily
     // if this client had exchanged a launch token. Collapsing them sends people to reconfigure a
     // firewall when they actually need to re-pair.
     401 -> "harness has no browser session for this client (HTTP 401)"
-    403 -> "harness trust fence rejected the request (HTTP 403)"
+    // A relay in front of the harness runs its own fence, and when it refuses, the harness never
+    // sees the request at all — so naming the harness sends people to debug the wrong machine.
+    // The relay says why in the body; when it does, that reason is the message. Otherwise the
+    // wording stands, because an empty 403 really is most likely the harness's own fence.
+    403 -> refusalReason(body)?.let { "request refused before the harness: $it (HTTP 403)" }
+        ?: "harness trust fence rejected the request (HTTP 403)"
     else -> "carrier returned HTTP $status"
+}
+
+/**
+ * The `error` a refusal body names, when it is shaped like one.
+ *
+ * Deliberately forgiving: this runs on a failure path, against a body written by whatever is in
+ * front of the harness, and a parse failure here must not replace a usable status with a crash.
+ */
+private fun refusalReason(body: String?): String? {
+    val text = body?.trim().orEmpty()
+    if (!text.startsWith("{")) return null
+    val reason = runCatching {
+        WireJson.parseToJsonElement(text).jsonObject["error"]?.jsonPrimitive?.contentOrNull
+    }.getOrNull()
+    return reason?.trim()?.takeIf { it.isNotEmpty() && it.length <= 200 }
 }
 
 /** Receives WebSocket carrier events; all callbacks may run on OkHttp's socket threads. */

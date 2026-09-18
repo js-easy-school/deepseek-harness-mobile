@@ -1,5 +1,6 @@
 package com.labteto.dshmobile.connection
 
+import com.labteto.dshmobile.core.wire.authorityOf
 import com.labteto.dshmobile.core.wire.ObservedKey
 import com.labteto.dshmobile.core.wire.RelayOrigin
 import com.labteto.dshmobile.core.wire.RelayPairing
@@ -205,7 +206,7 @@ class DiscoveryEngine @Inject constructor(
         val budget = budgeted(timeouts)
         val tlsObserved = ObservedKey()
         val overTls = RelayPairing.locate(
-            "https://$host:$port",
+            "https://" + authorityOf(host, port),
             RelayTls.trustOnFirstUseClient(budget, tlsObserved),
         )
         when (overTls) {
@@ -219,7 +220,7 @@ class DiscoveryEngine @Inject constructor(
             else -> Unit
         }
 
-        when (val overPlain = RelayPairing.locate("http://$host:$port", budget)) {
+        when (val overPlain = RelayPairing.locate("http://" + authorityOf(host, port), budget)) {
             is RelayOrigin.Here -> RelayProbe(overPlain.origin, null)
             is RelayOrigin.Untrusted -> RelayProbe(overPlain.origin, null, hostRefused = true)
             // The harness's own port pointing at the relay's. Worth one more call: what is recorded

@@ -1,14 +1,12 @@
 package com.labteto.dshmobile.ui.screens.main
 
 import android.net.Uri
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -44,7 +42,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.input.key.*
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +56,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -200,9 +199,10 @@ internal fun Composer(
                         true
                     } else false
                 },
-                keyboardActions = KeyboardActions(onSend = {
-                    if (canSend) { val text = currentDraft; currentOnDraftChange(""); currentOnSend(text) }
-                }),
+                // No `keyboardActions` here. The field is multi-line, so it carries the default IME
+                // action and the on-screen return key inserts a newline — which means an
+                // `onSend` action could never fire, and the one that used to sit here never did.
+                // The send key is the button; Ctrl/Cmd+Enter above is the shortcut.
                 enabled = enabled,
                 placeholder = {
                     Text(
@@ -239,7 +239,7 @@ internal fun Composer(
             ) {
                 CircleAction(
                     icon = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.chat_composer_commands),
+                    description = stringResource(R.string.chat_composer_commands),
                     size = 30,
                     background = colors.hoverSolid,
                     tint = colors.labelPrimary,
@@ -258,50 +258,54 @@ internal fun Composer(
 
                 ContextMeter(contextBreakdown, contextPressure)
 
-                // Send and stop occupy the same slot: the affordance changes meaning during a turn
-                // rather than the row re-flowing around a second button appearing.
-                AnimatedContent(
-                    targetState = running,
-                    transitionSpec = {
-                        (fadeIn(DsAnimations.fade) + scaleIn(initialScale = 0.85f))
-                            .togetherWith(fadeOut(DsAnimations.fade) + scaleOut(targetScale = 0.85f))
+                // Send is always present; stop joins it while a turn runs.
+                //
+                // These used to share one slot, swapping on `running`, which meant a running
+                // session offered no way to send at all — the Queue and Steer modes in the + sheet
+                // were unreachable from the phone, and the on-screen return key inserts a newline,
+                // so there was nothing else to press. The host has always admitted
+                // `session/prompt` with `mode: queue|steer` mid-turn; only the button was missing.
+                //
+                // Stop keeps the right-hand position it had, so the gesture for stopping a turn is
+                // where it always was and send appears beside it rather than under the thumb
+                // already reaching for stop.
+                CircleAction(
+                    icon = Icons.Filled.ArrowUpward,
+                    description = stringResource(R.string.chat_composer_send),
+                    size = 36,
+                    background = if (canSend) colors.buttonInfoFill else colors.buttonPrimaryDimmed,
+                    tint = if (canSend) Color.White else colors.labelTertiary,
+                    enabled = canSend,
+                    onClick = {
+                        val text = currentDraft
+                        currentOnDraftChange("")
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        currentOnSend(text)
                     },
-                    label = "sendStop",
-                ) { isRunning ->
-                    if (isRunning) {
-                        CircleAction(
-                            icon = null,
-                            contentDescription = stringResource(R.string.chat_composer_stop),
-                            size = 36,
-                            background = colors.error,
-                            tint = Color.White,
-                            enabled = true,
-                            onClick = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onStop()
-                            },
-                        ) {
-                            Box(
-                                Modifier
-                                    .size(11.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(Color.White),
-                            )
-                        }
-                    } else {
-                        CircleAction(
-                            icon = Icons.Filled.ArrowUpward,
-                            contentDescription = stringResource(R.string.chat_composer_send),
-                            size = 36,
-                            background = if (canSend) colors.buttonInfoFill else colors.buttonPrimaryDimmed,
-                            tint = if (canSend) Color.White else colors.labelTertiary,
-                            enabled = canSend,
-                            onClick = {
-                                val text = currentDraft
-                                currentOnDraftChange("")
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                currentOnSend(text)
-                            },
+                )
+
+                AnimatedVisibility(
+                    visible = running,
+                    enter = fadeIn(DsAnimations.fade) + scaleIn(initialScale = 0.85f),
+                    exit = fadeOut(DsAnimations.fade) + scaleOut(targetScale = 0.85f),
+                ) {
+                    CircleAction(
+                        icon = null,
+                        description = stringResource(R.string.chat_composer_stop),
+                        size = 36,
+                        background = colors.error,
+                        tint = Color.White,
+                        enabled = true,
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onStop()
+                        },
+                    ) {
+                        Box(
+                            Modifier
+                                .size(11.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color.White),
                         )
                     }
                 }
@@ -528,7 +532,7 @@ private fun FileAttachmentChip(file: PendingAttachment.File, onRetry: () -> Unit
 @Composable
 private fun CircleAction(
     icon: androidx.compose.ui.graphics.vector.ImageVector?,
-    contentDescription: String,
+    description: String,
     size: Int,
     background: Color,
     tint: Color,
@@ -538,7 +542,10 @@ private fun CircleAction(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(size.dp),
+        // Described here rather than on the icon, because not every one of these has an icon: the
+        // stop button draws a plain square through `content`, and while the description hung off
+        // the icon that button announced nothing at all to a screen reader.
+        modifier = Modifier.size(size.dp).semantics { this.contentDescription = description },
         enabled = enabled,
         shape = CircleShape,
         color = background,
@@ -548,7 +555,9 @@ private fun CircleAction(
                 content != null -> content()
                 icon != null -> Icon(
                     icon,
-                    contentDescription = contentDescription,
+                    // The Surface above already carries it; repeating it here would have a screen
+                    // reader say the label twice.
+                    contentDescription = null,
                     tint = tint,
                     modifier = Modifier.size((size * 0.46f).dp),
                 )

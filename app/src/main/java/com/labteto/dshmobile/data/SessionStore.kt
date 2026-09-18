@@ -6,6 +6,7 @@ import com.labteto.dshmobile.connection.ConnectionManager
 import com.labteto.dshmobile.connection.ConnectionPhase
 import com.labteto.dshmobile.connection.HostsStore
 import com.labteto.dshmobile.core.session.AssistantLiveState
+import com.labteto.dshmobile.core.session.ChunkRows
 import com.labteto.dshmobile.core.session.ConversationSnapshot
 import com.labteto.dshmobile.core.session.EventFold
 import com.labteto.dshmobile.core.session.QueueItem
@@ -101,6 +102,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -593,15 +595,23 @@ class SessionStore @Inject constructor(
         // complete baseline, and the list is what their increments are applied on top of.
         startHostStreams()
         _hostInfo.value = connectionManager.generation?.description
-        refreshSessions()
-        // Host-scoped and needed before anything is tapped: the chat bar names the session's preset
-        // as soon as it renders, and without the roster it could only show the raw wire id.
-        refreshAgentPresets()
-        refreshPermissionCatalog()
-        // On a reconnect `currentSessionId` is already set, so the resolver only ever runs on the
-        // first connect of a process — no double-open, and reconnect keeps reopening what was open.
-        val sid = currentSessionId.value ?: resolveInitialSession() ?: return
-        openSession(sid)
+        coroutineScope {
+            // Host-scoped and needed before anything is tapped, but needed by nothing on the way to
+            // the transcript: the chat bar names the session's preset as soon as it renders, and
+            // the permission chip wants its catalog, and both can land while the session opens.
+            // Awaiting them here put two full phone→relay→host round trips in front of the first
+            // thing the reader actually looks at. Neither throws — each reports its own failure —
+            // so nothing downstream has to know whether they have landed yet.
+            launch { refreshAgentPresets() }
+            launch { refreshPermissionCatalog() }
+            // The list is the one read the landing session is chosen from, so it alone is awaited.
+            refreshSessions()
+            // On a reconnect `currentSessionId` is already set, so the resolver only ever runs on
+            // the first connect of a process — no double-open, and reconnect keeps reopening what
+            // was open.
+            val sid = currentSessionId.value ?: resolveInitialSession() ?: return@coroutineScope
+            openSession(sid)
+        }
     }
 
     /**
@@ -1213,11 +1223,21 @@ class SessionStore @Inject constructor(
             }
         }
         startFollow(sessionId)
-        loadSkills(sessionId)
-        loadModels(sessionId)
-        refreshSubagents()
-        refreshCommands()
-        rememberLastSession(sessionId)
+        // Everything past the follow stream furnishes the chrome around the transcript — the skill
+        // and model pickers, the subagent list, the command catalog — and none of it is needed to
+        // paint a single message. Run in series they stacked four round trips onto every session
+        // tap, which is what made switching sessions feel like loading them. The follow stream is
+        // already open by this point, so the transcript arrives while these are still in flight.
+        //
+        // `refreshSubagents` and `refreshCommands` read the open session from `currentId`, which
+        // was set synchronously above, so they still target this session rather than a stale one.
+        coroutineScope {
+            launch { loadSkills(sessionId) }
+            launch { loadModels(sessionId) }
+            launch { refreshSubagents() }
+            launch { refreshCommands() }
+            launch { rememberLastSession(sessionId) }
+        }
     }
 
     /**
@@ -1319,9 +1339,14 @@ class SessionStore @Inject constructor(
         if (changed) rebuildTicks.trySend(Unit)
     }
 
-    /** History records are plain events since harness 0.1.3; nothing is packed any more. */
+    /**
+     * History records are plain events since harness 0.1.3, but a 0.1.2 host still packs runs of
+     * consecutive assistant deltas into one record. Expanding those back into scalar events is
+     * what keeps the journal's sequence numbers contiguous; see
+     * [com.labteto.dshmobile.core.session.ChunkRows].
+     */
     private fun expandRecords(records: List<SessionHistoryRecord>): List<SessionEventEnvelope> =
-        records.map { wireEventToEnvelope(it.event) }
+        ChunkRows.expandAll(records).map { wireEventToEnvelope(it) }
 
     /** Persist the landing session for this harness; a write failure is not worth surfacing. */
     private suspend fun rememberLastSession(sessionId: String) {
@@ -2146,7 +2171,10 @@ class SessionStore @Inject constructor(
         val epoch = ++permissionCatalogEpoch
         val key = activeHostKey
         val api = apiForHost(key) ?: return
-        permissionCatalog.value = null
+        // Not cleared before the read. Blanking first made the permission chip lose its options for
+        // the length of a round trip on every baseline, which reads as the chip breaking rather
+        // than as a refresh. The epoch and host guards below already stop a slow answer from
+        // overwriting a newer host's catalog, which is what the clear was standing in for.
         val result = api.permissionCatalog()
         if (epoch == permissionCatalogEpoch && key == activeHostKey) {
             permissionCatalog.value = (result as? RpcResult.Ok)?.value

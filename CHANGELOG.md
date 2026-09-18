@@ -3,6 +3,51 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.2] - 2026-09-18
+
+### Fixed
+
+- A permanent red "Reconnecting…" banner over a healthy, streaming connection, against a
+  harness 0.1.2 host. That version packs a run of consecutive assistant deltas into one
+  `chunks` history record carrying only the run's first sequence number, and the app read the
+  record as a single event — which swallowed every number after the first and left the
+  journal looking gapped. Packed records are read again and expanded back into one event per
+  delta. (#20)
+- Generated text no longer flickers at the bottom of the transcript while a reply is being
+  thought or written. The list is laid out in reverse, so the row the viewport anchors on is
+  the newest one: a growing reply extends in place instead of displacing everything after it,
+  and following the tail costs no scroll at all. Reading back through history mid-turn is
+  steady for the same reason, and a page of older messages can no longer move what is on
+  screen. (#21)
+- Opening a session and moving between sessions are quicker. The three reads a fresh connection
+  starts with — session list, agent presets, permission catalog — ran one after
+  another, and every session tap then waited on four more round trips for skills, models,
+  subagents and commands before the transcript could paint, though none of them is needed to
+  draw a message. They now run alongside the work that is. (#22)
+- The permission chip keeps its options while its catalog refreshes, instead of emptying for
+  the length of a round trip. (#22)
+- **A running turn offered no way to send.** Send and stop shared one slot, so starting a turn
+  replaced the send button with the red stop button, and the on-screen return key inserts a
+  newline. Queue and Steer sat in the + sheet with no way to reach them from a phone. Send now
+  sits beside stop while a turn runs, enabled once there is something to send, and stop keeps
+  its place on the right. The mode chosen in the + sheet still decides whether the message is
+  queued or steers the running turn, and a queued message appears in the queue dock as
+  before. (#23)
+- **Every `/api` call was refused on an IPv6-only network.** The `Host` header was assembled by
+  hand from the address with no brackets, so an address like `fdef:…:d12a` on port 3443
+  went out as `fdef:…:d12a:3443`, which no URL parser can read back. dsh-relay logged
+  `unparsable-host` and refused each request before it reached the harness, and the harness's
+  own fence parses the header the same way. Pairing, health checks and the event stream were
+  unaffected, because nothing else sets that header by hand. IPv6 literals are bracketed now,
+  here and in the two other places an address was spelled into a URL by hand. (#24)
+- A 403 from something in front of the harness says so and names the reason the refusal carried,
+  rather than reporting the harness's trust fence. The two have entirely different fixes. (#24)
+- The stop button announced nothing to a screen reader. Its label was attached to the icon of a
+  round composer button, and stop is the one such button that draws a plain square instead of an
+  icon. The label now sits on the button itself, whichever of the two it draws. (#23)
+
+Reported by @MatunSh (#20, #21, #22, #23) and @ServerDestroyer (#24).
+
 ## [0.11.1] - 2026-09-17
 
 ### Fixed
