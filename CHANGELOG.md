@@ -3,6 +3,27 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.3] - 2026-09-19
+
+### Fixed
+
+- **Every answer to a question card and every approval failed on the wire.** Tapping Submit on
+  an `ask_user_question` card, or allowing or rejecting an approval, was refused by the host
+  and the tool call on the other end stayed blocked — the only way through was to stop the turn
+  and send the choice as an ordinary message. `$events/result` is an ordinary Remote, so its
+  `clientId`, `eventId` and `outcome` belong inside the usual `args` object; this one call
+  posted them bare, and the gateway answers that with *Remote event result requires exactly one
+  plain-object args field*. It was the only unary in the client that did not go through the
+  wrapping path, and it now does. The mock harness had been written from the app rather than
+  from the host and enforced the same wrong shape, so both halves of this repo agreed on a
+  payload no harness would take; it now requires the wrapper, and the bare shape is pinned as a
+  refusal on both sides. (#25)
+- A refusal of an answer is no longer reported as **"Could not reach the harness."** Anything
+  the host sent back other than `not-pending` was folded into "unsent", which sent reporters to
+  debug their network for what was a protocol fault. A reply that reached the host and came
+  back `ok:false` now names the host's own code; "could not reach" is kept for a request that
+  genuinely never completed. (#25)
+
 ## [0.11.2] - 2026-09-18
 
 ### Fixed

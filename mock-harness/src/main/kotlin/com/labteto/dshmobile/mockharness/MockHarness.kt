@@ -60,9 +60,11 @@ import java.util.concurrent.CopyOnWriteArrayList
  *    opens by name. The `$events` stream answers its `open` with a `ready` frame; everything
  *    else a test pushes rides whichever stream it names, including the `assistant-stream`
  *    frames a `session/follow` follower opted into ([pushAssistantStream]);
- *  - answers to pending waterfalls: `POST /api/$events/result` with `{clientId, eventId,
- *    outcome}`. An answer to a question this mock pushed is judged by [judgeQuestionResponse],
- *    the host's own acceptance law; anything else is acknowledged;
+ *  - answers to pending waterfalls: `POST /api/$events/result` with `{"args": {clientId,
+ *    eventId, outcome}}` — the ordinary Remote envelope, and the gateway refuses a bare
+ *    `{clientId, eventId, outcome}` payload, so this mock does too. An answer to a question
+ *    this mock pushed is judged by [judgeQuestionResponse], the host's own acceptance law;
+ *    anything else is acknowledged;
  *  - file uploads: the raw-byte route `POST /api/session/uploadFileBinary` and the
  *    `fileUploads/upload` Remote, both minting receipts a prompt can cite.
  *
@@ -592,7 +594,15 @@ class MockHarness(
      * host has since replayed.
      */
     private fun judgeEventResult(payload: JsonElement): JsonElement {
-        val body = payload as? JsonObject ?: throw MockRefusal("bad-response")
+        // The `args` step is the whole reason this is checked rather than assumed: through
+        // 0.11.2 the client posted the three fields bare, this mock read them bare, and the two
+        // agreed with each other while the real gateway refused every answer. A payload without
+        // exactly one plain-object `args` is the gateway's `gateway/internal` refusal, so it is
+        // one here too.
+        val envelopeArgs = (payload as? JsonObject)?.takeIf { it.keys == setOf("args") }
+            ?: throw MockRefusal("gateway/internal", ARGS_REQUIRED)
+        val body = envelopeArgs["args"] as? JsonObject
+            ?: throw MockRefusal("gateway/internal", ARGS_REQUIRED)
         if ((body["clientId"] as? JsonPrimitive)?.contentOrNull != clientId) {
             throw MockRefusal("stale-generation")
         }
@@ -738,7 +748,7 @@ class MockHarness(
             try {
                 respondJson(okEnvelope(rpcId, judgeEventResult(payload)))
             } catch (refusal: MockRefusal) {
-                respondJson(errorEnvelope(rpcId, refusal.reason, "answer refused"))
+                respondJson(errorEnvelope(rpcId, refusal.reason, refusal.detail))
             }
             return
         }
@@ -969,7 +979,15 @@ internal const val EVENT_RESULT_ENDPOINT = "\u0024events/result"
  * carrier. 0.1.2 has no such carrier — the answer is an ordinary unary call — so a refusal is an
  * ordinary business error whose `code` carries the reason.
  */
-internal class MockRefusal(val reason: String) : Exception(reason)
+internal class MockRefusal(
+    val reason: String,
+    /** The human-readable half, when the host's own wording is worth replicating. */
+    val detail: String = "answer refused",
+) : Exception(reason)
+
+/** The gateway's own wording when a `$events/result` payload is not `{"args": {…}}`. */
+const val ARGS_REQUIRED: String =
+    "typert gateway: Remote event result requires exactly one plain-object args field"
 
 private const val ACCEPTED = """{"accepted":true}"""
 private const val REFUSED_BAD_RESPONSE = """{"accepted":false,"reason":"bad-response"}"""

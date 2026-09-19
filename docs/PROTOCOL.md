@@ -166,10 +166,16 @@ Pending requests arrive as **waterfall** frames on `$events` (below) and are
 settled through the Gateway's own unary endpoint, `POST /api/$events/result`:
 
 ```json
-{"type":"client-request","rpcId":"<uuid>","method":"$events/result","payload":{
+{"type":"client-request","rpcId":"<uuid>","method":"$events/result","payload":{"args":{
   "clientId":"<from the ready frame>","eventId":"<from the waterfall frame>",
-  "outcome":{"kind":"result","value":{"answers":[…]}}}}
+  "outcome":{"kind":"result","value":{"answers":[…]}}}}}
 ```
+
+The `args` wrapper is not optional here either: the Gateway reads this endpoint
+as an ordinary Remote, and a bare `{clientId, eventId, outcome}` payload is
+refused with `gateway/internal` — *Remote event result requires exactly one
+plain-object args field*. The app posted it bare through 0.11.2, which failed
+every question answer and every approval on the wire.
 
 `clientId` binds the reply to the current connection generation and `eventId` to
 one pending request; the host refuses a reply carrying a retired generation,

@@ -88,6 +88,7 @@ import com.labteto.dshmobile.core.wire.dto.WorkspaceValue
 import com.labteto.dshmobile.core.wire.dto.WorkspaceView
 import com.labteto.dshmobile.core.wire.dto.imageRejectionOf
 import com.labteto.dshmobile.core.wire.RpcError
+import com.labteto.dshmobile.core.wire.TransportFailures
 import com.labteto.dshmobile.core.wire.encodeToJsonElement
 import com.labteto.dshmobile.core.wire.newPromptRequestId
 import java.io.InputStream
@@ -192,8 +193,10 @@ sealed interface QuestionOutcome {
     data object Accepted : QuestionOutcome
 
     /**
-     * Refused. `bad-response` means the payload did not match the request it answered;
-     * `not-pending` means the wait had already settled.
+     * Refused by the host. `bad-response` means the payload did not match the request it
+     * answered; `not-pending` means the wait had already settled; anything else is the code the
+     * host sent, named rather than translated — a refusal this build has never heard of is still
+     * worth showing, because the wait behind it stays open either way.
      */
     data class Refused(val reason: String) : QuestionOutcome
 
@@ -1686,11 +1689,17 @@ class SessionStore @Inject constructor(
     ): QuestionOutcome = when (result) {
         is RpcResult.Ok -> QuestionOutcome.Accepted
         is RpcResult.Err -> {
-            log("$what failed for $sessionId: ${result.error.message}")
-            if (result.error.code == "not-pending") {
-                QuestionOutcome.Refused("not-pending")
-            } else {
+            log("$what failed for $sessionId: ${result.error.code}: ${result.error.message}")
+            // The split is "did the host answer at all", not a list of codes. A carrier failure
+            // carries a [TransportFailure] marker and nothing is known about the wait; anything
+            // else reached the host and came back `ok:false`, so the refusal is reported with
+            // the host's own code. Folding those into [QuestionOutcome.Unsent] is what made a
+            // malformed envelope read as "could not reach the harness" and sent reporters to
+            // debug their network for a protocol fault.
+            if (TransportFailures.of(result.error) != null) {
                 QuestionOutcome.Unsent
+            } else {
+                QuestionOutcome.Refused(result.error.code)
             }
         }
     }

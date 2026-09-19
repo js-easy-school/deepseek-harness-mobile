@@ -8,7 +8,8 @@ checked against.
 
 | DSH Mobile | Harness version | Status |
 |---|---|---|
-| 0.11.1 – 0.11.2 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Current target |
+| 0.11.3 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Current target |
+| 0.11.1 – 0.11.2 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Question answers and approvals are refused by any harness ≥ 0.1.2: `$events/result` was posted without its `args` wrapper |
 | 0.11.0 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | See [validation](VALIDATION-0.11.0.md) |
 | 0.10.1 | 0.1.3-alpha.1 | Previous baseline |
 | 0.10.0 | 0.1.3-alpha.1 | |
@@ -52,7 +53,7 @@ mounted beside the harness rather than part of it.
 
 | DSH Mobile | [dsh-relay](https://github.com/sorsama/deepseek-harness-relay) | Notes |
 |---|---|---|
-| 0.11.0 – 0.11.2 | 0.2.1 | As 0.10.x. From 0.11.2 the `Host` header brackets an IPv6 literal, without which the relay's fence refuses every `/api` call as `unparsable-host` |
+| 0.11.0 – 0.11.3 | 0.2.1 | As 0.10.x. From 0.11.2 the `Host` header brackets an IPv6 literal, without which the relay's fence refuses every `/api` call as `unparsable-host` |
 | 0.10.0 – 0.10.1 | 0.2.1 | Pairing payload `v: 1`; mDNS TXT `v: 1`. File uploads need the relay to proxy `/api/session/uploadFileBinary`, or the app falls back to the `fileUploads/upload` Remote |
 | 0.9.2 – 0.9.3 | 0.2.1 | |
 | 0.9.1 | 0.2.1 | |
@@ -165,7 +166,9 @@ a summary rather than an exhaustive list.
   Gateway-internal `$events` stream yields its opening `ready` frame.
 - **Answers.** `/api/respond` is gone. Approvals and questions arrive as
   agent-scoped waterfalls on `$events` and are answered through
-  `$events/result`, bound to the generation by its `clientId`.
+  `$events/result`, bound to the generation by its `clientId`. That endpoint is
+  an ordinary Remote, so the answer rides in the usual `args` object like every
+  other unary — a bare payload is refused.
 - **History is a stream.** `session.history` became `session/follow` (a stream
   opening with a complete snapshot) plus `session/page` (a unary read that
   *requires* the follow generation's cursor).

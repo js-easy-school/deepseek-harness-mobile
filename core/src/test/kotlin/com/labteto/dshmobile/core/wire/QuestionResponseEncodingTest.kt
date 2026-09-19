@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -77,9 +78,12 @@ class QuestionResponseEncodingTest {
         val envelope = body(transport)
         assertEquals("client-request", envelope["type"]!!.jsonPrimitive.content)
         val payload = envelope["payload"]!!.jsonObject
-        assertEquals("client-1", payload["clientId"]!!.jsonPrimitive.content)
-        assertEquals("evt-1", payload["eventId"]!!.jsonPrimitive.content)
-        val outcome = payload["outcome"]!!.jsonObject
+        // The gateway reads this endpoint as an ordinary Remote, so the fields ride inside
+        // `args`; see `the answer rides inside args, like every other unary` below.
+        val args = payload["args"]!!.jsonObject
+        assertEquals("client-1", args["clientId"]!!.jsonPrimitive.content)
+        assertEquals("evt-1", args["eventId"]!!.jsonPrimitive.content)
+        val outcome = args["outcome"]!!.jsonObject
         assertEquals("result", outcome["kind"]!!.jsonPrimitive.content)
         val answers = outcome["value"]!!.jsonObject["answers"]!!.jsonArray
         assertNull(answers[0].jsonObject["custom"])
@@ -118,10 +122,34 @@ class QuestionResponseEncodingTest {
             ),
         )
 
-        val outcome = body(transport)["payload"]!!.jsonObject["outcome"]!!.jsonObject
+        val outcome = body(transport)["payload"]!!.jsonObject["args"]!!.jsonObject["outcome"]!!.jsonObject
         assertEquals("rejected", outcome["kind"]!!.jsonPrimitive.content)
         val error = outcome["error"]!!.jsonObject
         assertEquals("cancelled", error["code"]!!.jsonPrimitive.content)
         assertEquals("the user closed this question request", error["message"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `the answer rides inside args, like every other unary`() = runTest {
+        // Through 0.11.2 this one call posted its three fields bare while every other unary
+        // wrapped them, and the gateway refused each one: "Remote event result requires exactly
+        // one plain-object args field". Nothing in the app said so — the refusal arrived as an
+        // ordinary business error and was reported as "could not reach the harness" — so the
+        // envelope is pinned here rather than left to the mock, which had learned the same
+        // wrong shape.
+        val transport = RecordingTransport()
+        client(transport).answerEvent(
+            "client-1",
+            "evt-3",
+            RemoteEventOutcome.Result(value = JsonPrimitive("allowed-once")),
+        )
+
+        val payload = body(transport)["payload"]!!.jsonObject
+        assertEquals(setOf("args"), payload.keys)
+        val args = payload["args"]!!.jsonObject
+        assertEquals(setOf("clientId", "eventId", "outcome"), args.keys)
+        assertEquals("client-1", args["clientId"]!!.jsonPrimitive.content)
+        assertEquals("evt-3", args["eventId"]!!.jsonPrimitive.content)
+        assertEquals("allowed-once", args["outcome"]!!.jsonObject["value"]!!.jsonPrimitive.content)
     }
 }

@@ -27,6 +27,7 @@ import com.labteto.dshmobile.core.wire.dto.PromptContentPart
 import com.labteto.dshmobile.core.wire.dto.SessionAssistantStreamFrame
 import com.labteto.dshmobile.core.wire.decodeFromJsonElement
 import com.labteto.dshmobile.core.wire.newPromptRequestId
+import com.labteto.dshmobile.mockharness.ARGS_REQUIRED
 import com.labteto.dshmobile.mockharness.MockHarness
 import com.labteto.dshmobile.core.session.AssistantLiveState
 import com.labteto.dshmobile.core.session.AssistantMessageNode
@@ -38,6 +39,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
@@ -488,6 +490,35 @@ class ProtocolEndToEndTest {
         )
         assertTrue("was $result", result is RpcResult.Err)
         assertEquals("stale-generation", (result as RpcResult.Err).error.code)
+    }
+
+    @Test
+    fun `the bare payload the app sent through 0_11_2 is refused`() = runBlocking {
+        // The shape the client posted until 0.11.3: the three fields with no `args` around them.
+        // The real gateway refuses it, and the mock did not — it had been written from the app
+        // rather than from the host, so both halves of this repo agreed on a payload no harness
+        // would take. Posted raw here, because the client can no longer produce it.
+        val bare = buildJsonObject {
+            put("type", "client-request")
+            put("rpcId", "bare-shape")
+            put("method", "\$events/result")
+            putJsonObject("payload") {
+                put("clientId", "c1")
+                put("eventId", "evt-bare")
+                putJsonObject("outcome") {
+                    put("kind", "result")
+                    put("value", JsonPrimitive(ApprovalOutcome.ALLOWED_ONCE))
+                }
+            }
+        }
+        val response = OkHttpRpcTransport(baseUrl, http, 5_000, 5_000)
+            .post("/api/\$events/result", bare.toString())
+
+        assertEquals(200, response.status)
+        val error = Json.parseToJsonElement(response.body)
+            .jsonObject["result"]!!.jsonObject["error"]!!.jsonObject
+        assertEquals("gateway/internal", error["code"]!!.jsonPrimitive.content)
+        assertEquals(ARGS_REQUIRED, error["message"]!!.jsonPrimitive.content)
     }
 
     @Test
