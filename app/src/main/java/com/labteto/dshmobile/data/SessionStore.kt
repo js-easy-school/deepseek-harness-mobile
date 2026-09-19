@@ -457,7 +457,7 @@ class SessionStore @Inject constructor(
     // which is both what an answer names and what a `cancel` frame withdraws — 0.1.2 mints no
     // separate approval id.
     private val approvalRequests = HashMap<String, ApprovalRequest>() // eventId -> request
-    private val questionEventBySession = HashMap<String, String>() // sessionId -> eventId
+    private val questionEvents = PendingQuestionRegistry()
 
     // Open-session fold state.
     private var currentId: String? = null
@@ -772,26 +772,29 @@ class SessionStore @Inject constructor(
             return
         }
         val sessionId = synchronized(lock) {
-            questionEventBySession.entries.firstOrNull { it.value == eventId }?.key
+            questionEvents.sessionFor(eventId)
         } ?: return
-        forgetQuestions(sessionId)
+        forgetQuestions(sessionId, eventId)
     }
 
     /**
-     * Drop whatever question batch [sessionId] is holding, by session rather than by event.
-     *
-     * The session is the identity the card is drawn from, so this also clears a batch whose event
-     * registration is already gone — the state that would otherwise draw a card no answer can
-     * reach, because [pendingQuestionEvent] has nothing left to address.
+     * Drop the question batch [sessionId] is holding — but only while it is still [eventId]'s, and
+     * only the card drawn from that same request. [PendingQuestionRegistry.forget] holds the rule
+     * and the reason for it; a null [eventId] is the corpse case it describes.
      */
-    private fun forgetQuestions(sessionId: String) {
+    private fun forgetQuestions(sessionId: String, eventId: String?) {
+        // Registry and card move together under the lock, so a replacement cannot land between
+        // them and lose its card to this call.
         synchronized(lock) {
-            questionEventBySession.remove(sessionId)
+            if (!questionEvents.forget(sessionId, eventId)) return
             removePendingLocked(sessionId, "question")
             removePendingLocked(sessionId, "plan-review")
             emitSessionsLocked()
+            val shown = _pendingQuestions.value
+            if (shown?.sessionId == sessionId && (eventId == null || shown.rpcId == eventId)) {
+                _pendingQuestions.value = null
+            }
         }
-        if (_pendingQuestions.value?.sessionId == sessionId) _pendingQuestions.value = null
     }
 
     // ------------------------------------------------------------------ control stream
@@ -957,7 +960,7 @@ class SessionStore @Inject constructor(
         questions: List<AskUserQuestionItem>,
     ) {
         synchronized(lock) {
-            questionEventBySession[sessionId] = eventId
+            questionEvents.install(sessionId, eventId)
             val kind = if (questions.any { it.intent is AskUserQuestionIntent.PlanReview }) {
                 "plan-review"
             } else {
@@ -965,8 +968,12 @@ class SessionStore @Inject constructor(
             }
             addPendingLocked(sessionId, kind)
             emitSessionsLocked()
+            // Inside the lock, with the registration it belongs to: [forgetQuestions] decides
+            // whether to clear the card by reading that registration, so a request that installed
+            // one but not yet the other could have its card taken by an answer to the request it
+            // just replaced.
+            _pendingQuestions.value = PendingQuestions(sessionId, eventId, questions)
         }
-        _pendingQuestions.value = PendingQuestions(sessionId, eventId, questions)
     }
 
     // ------------------------------------------------------------------ session list state updates
@@ -1025,7 +1032,7 @@ class SessionStore @Inject constructor(
             sessionRows.remove(sessionId)
             pendingKinds.remove(sessionId)
             runningBySession.remove(sessionId)
-            questionEventBySession.remove(sessionId)
+            questionEvents.discard(sessionId)
             emitSessionsLocked()
         }
     }
@@ -1691,7 +1698,7 @@ class SessionStore @Inject constructor(
             ),
             "question response",
             sessionId,
-        ) { forgetQuestions(sessionId) }
+        ) { forgetQuestions(sessionId, eventId) }
     }
 
     /**
@@ -1722,11 +1729,11 @@ class SessionStore @Inject constructor(
             ),
             "question dismissal",
             sessionId,
-        ) { forgetQuestions(sessionId) }
+        ) { forgetQuestions(sessionId, eventId) }
     }
 
     private fun pendingQuestionEvent(sessionId: String): String? {
-        val eventId = synchronized(lock) { questionEventBySession[sessionId] }
+        val eventId = synchronized(lock) { questionEvents.eventFor(sessionId) }
         if (eventId == null) log("no pending question for session $sessionId")
         return eventId
     }
@@ -1740,7 +1747,9 @@ class SessionStore @Inject constructor(
      * this client's to settle any more.
      */
     private fun abandonQuestions(sessionId: String): QuestionOutcome {
-        forgetQuestions(sessionId)
+        // Null, not an event: the corpse is defined by having no registration, and a request that
+        // arrived in the meantime has one and must be left alone.
+        forgetQuestions(sessionId, null)
         return QuestionOutcome.Refused(NOT_PENDING)
     }
 
@@ -1749,8 +1758,9 @@ class SessionStore @Inject constructor(
      * that answer ended the request behind it.
      *
      * [forget] is the card's only exit on this client, and it is a caller's lambda rather than an
-     * `eventId` so that each path forgets by the identity it already holds — a question by its
-     * session, an approval by its event. The web client has no equivalent because it never needs
+     * `eventId` because the two kinds are held differently — an approval by its event alone, a
+     * question by its session *and* its event, so that an answer cannot take away the card of the
+     * request that replaced the one it answered. The web client has no equivalent because it never needs
      * one: its `PendingQuestion.answer()` resolves the waiting promise in the same process, so the
      * card's life ends with the call. Here the answer is a POST, and the host settles it by
      * *removing this client's delivery first* and then pushing `cancel` to the deliveries that
