@@ -464,15 +464,18 @@ fun ChatScreen(
             // so burying them behind a scroll would strand the session.
             val approval = pendingApproval
             if (approval != null && approval.sessionId == currentSessionId) {
+                // A refusal is said out loud here rather than swallowed, for the reason [refusalOf]
+                // gives: the host's wait — and the tool call behind it — stays open, and a panel
+                // that reported nothing would read as two buttons that do nothing.
+                fun decide(allow: Boolean) = scope.launch {
+                    refusalOf(store.respondApproval(approval.sessionId, approval.approvalId, allow))
+                        ?.let { toast.second(it) }
+                }
                 ApprovalPanel(
                     toolName = approval.toolName,
                     reason = approval.reason,
-                    onAllow = {
-                        scope.launch { store.respondApproval(approval.sessionId, approval.approvalId, true) }
-                    },
-                    onReject = {
-                        scope.launch { store.respondApproval(approval.sessionId, approval.approvalId, false) }
-                    },
+                    onAllow = { decide(true) },
+                    onReject = { decide(false) },
                 )
             }
             val questions = pendingQuestions

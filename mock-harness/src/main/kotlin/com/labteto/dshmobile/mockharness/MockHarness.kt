@@ -620,14 +620,26 @@ class MockHarness(
             "result" -> Unit
             else -> throw MockRefusal("bad-response")
         }
-        // The answer object is the outcome's value; 0.1.1 wrapped it in a response envelope,
-        // and [judgeQuestionResponse] still reads that shape.
+        // The answer object is the outcome's value; 0.1.1 wrapped it in a response envelope, and
+        // [judgeQuestionResponse] still reads that shape — `value` holding `{sessionId, answer}`
+        // rather than the answer itself. Handing it the bare answer instead passed the schema
+        // parse and then failed the very first clause, so every well-formed answer to a question
+        // this mock had actually pushed came back `bad-response`: the acceptance law, the whole
+        // reason this endpoint is judged rather than waved through, was unreachable. The session
+        // comes from the pending request because 0.1.2 does not send one — the `eventId` is the
+        // correlation now, and that clause is vestigial.
         val envelope = buildJsonObject {
             put(
                 "result",
                 buildJsonObject {
                     put("ok", true)
-                    put("value", outcome["value"] ?: JsonNull)
+                    put(
+                        "value",
+                        buildJsonObject {
+                            put("sessionId", pending.sessionId)
+                            put("answer", outcome["value"] ?: JsonNull)
+                        },
+                    )
                 },
             )
         }

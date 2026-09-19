@@ -282,6 +282,16 @@ on recovery must come from a query or a stream baseline instead. A `cancel`
 withdraws a delivered waterfall — another client answered first, or the host's
 caller gave up.
 
+A `cancel` never reaches the client whose answer settled the request. The host
+drops the answering delivery and *then* cancels the ones that remain, so the one
+client that learns nothing is the one that acted; asking again is no help either,
+because a second answer to a settled event is early-returned `ok:true` rather
+than refused. A client's own receipt is therefore the only signal it will ever
+get that its card is done, and it has to take the card away on that alone —
+keeping `cancel` for foreign answers and host-side cancellations. Through 0.11.3
+the app waited for the frame instead, and every answered, dismissed or skipped
+question card stuck on "Submitting…" until the app was force-stopped.
+
 **`session/follow`** takes `{address, maxMessages?, assistantStream?}` and opens
 with one complete snapshot, then yields durable events and — when the follower
 opted in — the live assistant frames:

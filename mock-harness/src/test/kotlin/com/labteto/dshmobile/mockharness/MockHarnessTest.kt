@@ -199,6 +199,45 @@ class MockHarnessTest {
     }
 
     @Test
+    fun eventResultJudgesAnAnswerToAQuestionThisHarnessPushed() = runBlocking {
+        // The acceptance law is only reached for an event this mock is actually holding — every
+        // other eventId is waved through — so the two tests either side of this one, which answer
+        // an unknown `evt-1`, never touch it. It had been unreachable in practice since the
+        // payload moved inside `args`: the judge reads `value` as `{sessionId, answer}` and was
+        // handed the bare answer, so every correct answer to a real question came back
+        // `bad-response`. Both verdicts are pinned here, on a question that exists.
+        harness.pushEvent(
+            Json.parseToJsonElement(
+                """{"type":"waterfall","event":"user-questions/request","eventId":"evt-judged",""" +
+                    """"agentId":"s1","request":{"questions":[{"id":"q1","question":"which?",""" +
+                    """"options":[{"label":"Rewrite"},{"label":"Patch"}]}]}}""",
+            ),
+        )
+
+        val wrongLabel = answerEventResult("evt-judged", """{"answers":[{"id":"q1","selected":["Nope"]}]}""")
+        assertFalse(wrongLabel["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("bad-response", wrongLabel["error"]!!.jsonObject["code"]!!.jsonPrimitive.content)
+
+        val accepted = answerEventResult("evt-judged", """{"answers":[{"id":"q1","selected":["Patch"]}]}""")
+        assertTrue(accepted["ok"]!!.jsonPrimitive.boolean)
+
+        // And the request is gone, so the second answer a stuck card would send is early-returned
+        // as a success rather than refused — the client cannot learn from the wire that it is done.
+        val again = answerEventResult("evt-judged", """{"answers":[{"id":"q1","selected":["Patch"]}]}""")
+        assertTrue(again["ok"]!!.jsonPrimitive.boolean)
+    }
+
+    /** POST one `result` outcome for [eventId] and hand back the `result` object of the answer. */
+    private fun answerEventResult(eventId: String, value: String) = Json.parseToJsonElement(
+        post(
+            "/api/${'$'}events/result",
+            """{"type":"client-request","rpcId":"${UUID.randomUUID()}","method":"${'$'}events/result",""" +
+                """"payload":{"args":{"clientId":"${harness.clientId}","eventId":"$eventId",""" +
+                """"outcome":{"kind":"result","value":$value}}}}""",
+        ).body(),
+    ).jsonObject["result"]!!.jsonObject
+
+    @Test
     fun eventResultRefusesAPayloadWithoutTheArgsWrapper() {
         // This endpoint is an ordinary Remote, so its three fields ride inside `args`. This mock
         // used to read them bare, which is exactly the shape the app sent through 0.11.2 — the

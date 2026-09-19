@@ -467,6 +467,73 @@ class ProtocolEndToEndTest {
     }
 
     @Test
+    fun `answering leaves the acting client nothing to wait for`() = runBlocking {
+        // Why the card has to be taken away locally. The host settles a waterfall by dropping the
+        // answering client's delivery first and then cancelling the deliveries that remain, so the
+        // client that acted never hears that the request resolved — and asking again is no help
+        // either, because a second answer to a settled event is early-returned `ok:true` rather
+        // than refused. Through 0.11.3 the card waited for a frame with both of those properties
+        // and sat on "Submitting…" until the app was force-stopped.
+        val recorder = Recorder()
+        val loop = ConnectionLoop({ mux() }, recorder, LoopConfig(delay = { }))
+        loop.start()
+        try {
+            assertTrue(await { recorder.connected.isNotEmpty() })
+            val generation = recorder.connected.first()
+            harness.pushEvent(
+                buildJsonObject {
+                    put("type", "waterfall")
+                    put("event", "user-questions/request")
+                    put("eventId", "evt-settled")
+                    put("agentId", "s1")
+                    putJsonObject("request") {
+                        putJsonArray("questions") {
+                            addJsonObject {
+                                put("id", "q1")
+                                put("question", "which?")
+                                putJsonArray("options") { addJsonObject { put("label", "Rewrite") } }
+                            }
+                        }
+                    }
+                },
+            )
+            assertTrue(await { recorder.frames.any { it is RemoteEventFrame.Waterfall } })
+            val answer = buildJsonObject {
+                putJsonArray("answers") {
+                    addJsonObject {
+                        put("id", "q1")
+                        putJsonArray("selected") { add("Rewrite") }
+                    }
+                }
+            }
+            val first = client().answerEvent(
+                clientId = generation.clientId,
+                eventId = "evt-settled",
+                outcome = RemoteEventOutcome.Result(value = answer),
+            )
+            assertTrue("answer was refused: $first", first is RpcResult.Ok)
+
+            // No `cancel` for the event this client just settled, however long it waits.
+            delay(250)
+            assertTrue(
+                "the acting client was told about its own answer",
+                recorder.frames.none { it is RemoteEventFrame.Cancel && it.eventId == "evt-settled" },
+            )
+
+            // And the second attempt the stuck card invited reads as success, not as a refusal
+            // the panel could have exited on.
+            val again = client().answerEvent(
+                clientId = generation.clientId,
+                eventId = "evt-settled",
+                outcome = RemoteEventOutcome.Result(value = answer),
+            )
+            assertTrue("was $again", again is RpcResult.Ok)
+        } finally {
+            loop.stop()
+        }
+    }
+
+    @Test
     fun `an answer from a retired generation is refused`() = runBlocking {
         // The whole point of binding a reply to a clientId: an answer typed before a reconnect
         // must not resolve a request the host has since replayed to the new generation.

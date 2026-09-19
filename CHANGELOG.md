@@ -3,6 +3,38 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.4] - 2026-09-19
+
+### Fixed
+
+- **An answered question card never went away.** Submitting an answer, dismissing the card with
+  ✕, or skipping every question all settled correctly on the harness — and left the card on the
+  phone frozen on "Submitting…" with its buttons dead. Tapping again did nothing, switching
+  sessions only hid it, and reconnecting could not clear it, because nothing was pending on the
+  host for it to withdraw; only a force-stop recovered. The card was waiting for the `cancel`
+  frame that withdraws a request, and that frame is the one thing the answering client never
+  receives: the host drops its delivery *first* and then cancels the deliveries that remain, so
+  every client except the one that acted is told. A taken answer now ends the card on its own
+  receipt, and `cancel` goes on covering the cases it is actually sent for — another client
+  answering, or the harness's caller giving up. 0.11.3 routed the previously-dead buttons
+  straight into this, so it cost a force-stop per question. (#27)
+- The same for an approval: allowing or refusing one now closes the panel. And a refused decision
+  says so, instead of leaving two buttons that appear to do nothing — the tool call behind an
+  approval the harness would not take stays blocked, which is worth a word. (#27)
+- A question card with no request left behind it — the harness forgot it, or the session went
+  away underneath it — is taken off the screen rather than left as a control with nothing to
+  answer.
+- **A card submission reported as "Could not reach the harness" on 0.11.2** was the `$events/result`
+  envelope refused on the wire, fixed in 0.11.3 — nothing was wrong with the network the message
+  sent people to go and check. Upgrading past 0.11.3 is the whole of that fix. (#28)
+- The mock harness this repo checks itself against had a matching defect, found while confirming
+  the above: its port of the host's answer-acceptance law was reading the wrong envelope, so it
+  refused every well-formed answer to a question it had actually pushed. The law had been
+  unreachable in practice since the payload moved inside `args`, which is how a repaired answer
+  path went untested end to end. It is exercised on a real request now, both verdicts pinned.
+
+Reported by @djurcola (#27) and @sortjiajun (#28).
+
 ## [0.11.3] - 2026-09-19
 
 ### Fixed
