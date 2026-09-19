@@ -190,12 +190,31 @@ class MockHarnessTest {
     fun eventResultAcceptsAnAnswerForThisGeneration() {
         val rpcId = UUID.randomUUID().toString()
         val body = """{"type":"client-request","rpcId":"$rpcId","method":"${'$'}events/result",""" +
-            """"payload":{"clientId":"${harness.clientId}","eventId":"evt-1",""" +
-            """"outcome":{"kind":"result","value":{}}}}"""
+            """"payload":{"args":{"clientId":"${harness.clientId}","eventId":"evt-1",""" +
+            """"outcome":{"kind":"result","value":{}}}}}"""
         val response = post("/api/${'$'}events/result", body)
         assertEquals(200, response.statusCode())
         val json = Json.parseToJsonElement(response.body()).jsonObject
         assertTrue(json["result"]!!.jsonObject["ok"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test
+    fun eventResultRefusesAPayloadWithoutTheArgsWrapper() {
+        // This endpoint is an ordinary Remote, so its three fields ride inside `args`. This mock
+        // used to read them bare, which is exactly the shape the app sent through 0.11.2 — the
+        // two agreed with each other and the real gateway refused every answer. The refusal is
+        // pinned here so the agreement cannot come back.
+        val rpcId = UUID.randomUUID().toString()
+        val body = """{"type":"client-request","rpcId":"$rpcId","method":"${'$'}events/result",""" +
+            """"payload":{"clientId":"${harness.clientId}","eventId":"evt-1",""" +
+            """"outcome":{"kind":"result","value":{}}}}"""
+        val response = post("/api/${'$'}events/result", body)
+        assertEquals(200, response.statusCode())
+        val result = Json.parseToJsonElement(response.body()).jsonObject["result"]!!.jsonObject
+        assertEquals(false, result["ok"]!!.jsonPrimitive.boolean)
+        val error = result["error"]!!.jsonObject
+        assertEquals("gateway/internal", error["code"]!!.jsonPrimitive.content)
+        assertEquals(ARGS_REQUIRED, error["message"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -205,8 +224,8 @@ class MockHarnessTest {
         // already replayed to the new one.
         val rpcId = UUID.randomUUID().toString()
         val body = """{"type":"client-request","rpcId":"$rpcId","method":"${'$'}events/result",""" +
-            """"payload":{"clientId":"stale","eventId":"evt-1",""" +
-            """"outcome":{"kind":"result","value":{}}}}"""
+            """"payload":{"args":{"clientId":"stale","eventId":"evt-1",""" +
+            """"outcome":{"kind":"result","value":{}}}}}"""
         val response = post("/api/${'$'}events/result", body)
         assertEquals(200, response.statusCode())
         val result = Json.parseToJsonElement(response.body()).jsonObject["result"]!!.jsonObject
