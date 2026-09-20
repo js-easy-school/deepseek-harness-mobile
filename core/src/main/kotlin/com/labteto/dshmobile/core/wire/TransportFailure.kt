@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.long
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.IOException
@@ -54,6 +55,32 @@ enum class TransportFailure {
     /** HTTP 404: no route claimed the path; the build does not compose that service. */
     NOT_FOUND,
 
+    /**
+     * HTTP 413: the request body exceeded the harness's own cap (300 MiB by default).
+     *
+     * Worth its own verdict because it is the one failure here the person can act on by sending
+     * less. Folding it into [NOT_A_HARNESS] told them to check whether they had typed the right
+     * address, which is never the problem when a large attachment is what provoked it.
+     */
+    TOO_LARGE,
+
+    /**
+     * HTTP 429: rate limited or locked out, with a `Retry-After` when the peer supplied one.
+     *
+     * Only a relay produces this today; the harness itself does not throttle. It is not a broken
+     * link and waiting fixes it, so it must not read as "not a harness" — the one verdict that
+     * tells someone to go and check their network.
+     */
+    RATE_LIMITED,
+
+    /**
+     * HTTP 502: something proxying for the harness answered, and the harness behind it did not.
+     *
+     * A relay or a reverse proxy is up while the harness is down or restarting. Reconnecting is
+     * the right response, which is the opposite of what [NOT_A_HARNESS] suggests.
+     */
+    UPSTREAM_DOWN,
+
     /** Something answered, but it does not speak the harness protocol. */
     NOT_A_HARNESS,
 
@@ -96,6 +123,9 @@ object TransportFailures {
     /** Key under which the originating HTTP status is written, when there was one. */
     const val STATUS_KEY: String = "httpStatus"
 
+    /** Key under which a 429's `Retry-After`, in seconds, is written when the peer stated one. */
+    const val RETRY_AFTER_KEY: String = "retryAfterSeconds"
+
     /** How far [hasPinMismatch] follows a cause chain before giving up. */
     private const val MAX_CAUSE_DEPTH = 8
 
@@ -104,6 +134,9 @@ object TransportFailures {
         401 -> TransportFailure.UNAUTHENTICATED
         403 -> TransportFailure.TRUST_FENCE
         404 -> TransportFailure.NOT_FOUND
+        413 -> TransportFailure.TOO_LARGE
+        429 -> TransportFailure.RATE_LIMITED
+        502 -> TransportFailure.UPSTREAM_DOWN
         0 -> classify(e.cause)
         // A 5xx or a stray 200-shaped answer from something that is not the harness.
         else -> TransportFailure.NOT_A_HARNESS
@@ -167,10 +200,15 @@ object TransportFailures {
         }
     }
 
-    /** The `details` object carrying [kind] (and [status], when non-zero) for [RpcError]. */
-    fun details(kind: TransportFailure, status: Int = 0): JsonObject = buildJsonObject {
+    /** The `details` object carrying [kind] (and [status]/[retryAfterSeconds], when known). */
+    fun details(
+        kind: TransportFailure,
+        status: Int = 0,
+        retryAfterSeconds: Long? = null,
+    ): JsonObject = buildJsonObject {
         put(DETAILS_KEY, kind.name)
         if (status != 0) put(STATUS_KEY, status)
+        if (retryAfterSeconds != null) put(RETRY_AFTER_KEY, retryAfterSeconds)
     }
 
     /** Read the marker back out of an error, or null when the error carries none. */
@@ -178,6 +216,23 @@ object TransportFailures {
         val name = (error.details as? JsonObject)?.get(DETAILS_KEY)?.jsonPrimitive?.content ?: return null
         return TransportFailure.entries.firstOrNull { it.name == name }
     }
+
+    /**
+     * How long to wait before retrying, in seconds.
+     *
+     * Stated by the peer when it sent `Retry-After`; otherwise the shared default, because a 429
+     * with no header still means "not yet" and retrying at once is the one wrong answer.
+     */
+    fun retryAfterSecondsOf(error: RpcError): Long? {
+        if (of(error) != TransportFailure.RATE_LIMITED) return null
+        val stated = runCatching {
+            error.details.jsonObject[RETRY_AFTER_KEY]?.jsonPrimitive?.long
+        }.getOrNull()
+        return stated ?: DEFAULT_RETRY_AFTER_SECONDS
+    }
+
+    /** Fallback back-off when a 429 arrives without `Retry-After`. */
+    const val DEFAULT_RETRY_AFTER_SECONDS: Long = 60
 
     /** The HTTP status recorded alongside the marker, when there was one. */
     fun statusOf(error: RpcError): Int? = runCatching {

@@ -70,6 +70,19 @@ class HostHeaderTest {
     @Test
     fun `other statuses are untouched`() {
         assertEquals("harness has no browser session for this client (HTTP 401)", carrierMessage(401))
-        assertEquals("carrier returned HTTP 502", carrierMessage(502, """{"error":"bad-gateway"}"""))
+        assertEquals("carrier returned HTTP 500", carrierMessage(500, """{"error":"boom"}"""))
+    }
+
+    /**
+     * Three statuses used to read as "that is not a harness", which sent people to check an
+     * address that was never wrong: 413 means the body was too big, 429 means wait, and 502 means
+     * the thing in front of the harness is up while the harness is not. Each needs a different
+     * response from the person, so each says a different thing.
+     */
+    @Test
+    fun `an over-large body, a throttle and a dead upstream each say what they are`() {
+        assertEquals("the harness refused the request as too large (HTTP 413)", carrierMessage(413))
+        assertEquals("rate limited before the harness (HTTP 429)", carrierMessage(429))
+        assertEquals("nothing answered behind the relay (HTTP 502)", carrierMessage(502))
     }
 }

@@ -40,6 +40,14 @@ class RpcTransportException(
     val status: Int,
     message: String,
     cause: Throwable? = null,
+    /**
+     * Seconds the peer asked the caller to wait, from `Retry-After` on a 429.
+     *
+     * Only a relay throttles today, and older ones omitted the header on their lockout paths, so
+     * an absent value is normal rather than a fault — the caller falls back to its own default
+     * rather than retrying immediately.
+     */
+    val retryAfterSeconds: Long? = null,
 ) : IOException(message, cause)
 
 /** The HTTP carrier for unary RPCs: one `POST /api/<path>` exchange. */
@@ -148,7 +156,11 @@ class OkHttpRpcTransport(
                             continuation.resume(RpcHttpResponse(resp.code, responseBody))
                         } else {
                             continuation.resumeWithException(
-                                RpcTransportException(resp.code, carrierMessage(resp.code, responseBody)),
+                                RpcTransportException(
+                                    resp.code,
+                                    carrierMessage(resp.code, responseBody),
+                                    retryAfterSeconds = retryAfterSecondsOf(resp),
+                                ),
                             )
                         }
                     }
@@ -300,6 +312,16 @@ internal fun hostHeaderFor(base: HttpUrl): String {
 }
 
 /**
+ * How long the peer asked the caller to wait, from `Retry-After` on a 429.
+ *
+ * A malformed or absent header reads as "unstated" rather than "retry now": older relays omit it
+ * on their lockout paths, and a client that treated silence as zero would hammer an address that
+ * had just told it to stop.
+ */
+internal fun retryAfterSecondsOf(response: Response): Long? =
+    response.header("Retry-After")?.trim()?.toLongOrNull()?.coerceAtLeast(1)
+
+/**
  * Carrier-layer failure text; 403 names the trust fence because that is the usual cause.
  *
  * File-level so the WebSocket path can wrap a failed upgrade in the same shape as a failed POST —
@@ -312,6 +334,14 @@ internal fun carrierMessage(status: Int, body: String? = null): String = when (s
     // if this client had exchanged a launch token. Collapsing them sends people to reconfigure a
     // firewall when they actually need to re-pair.
     401 -> "harness has no browser session for this client (HTTP 401)"
+    // The harness caps a request body (300 MiB by default) and answers 413 rather than reading it.
+    // Saying so beats "not a harness", which is what this used to read as: the address was right
+    // and the attachment was too big.
+    413 -> "the harness refused the request as too large (HTTP 413)"
+    // Only a relay throttles; the harness itself does not.
+    429 -> "rate limited before the harness (HTTP 429)"
+    // A relay or reverse proxy answered and the harness behind it did not.
+    502 -> "nothing answered behind the relay (HTTP 502)"
     // A relay in front of the harness runs its own fence, and when it refuses, the harness never
     // sees the request at all — so naming the harness sends people to debug the wrong machine.
     // The relay says why in the body; when it does, that reason is the message. Otherwise the

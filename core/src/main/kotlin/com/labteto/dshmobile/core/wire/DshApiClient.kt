@@ -212,7 +212,11 @@ class DshApiClient(
             else -> "internal"
         },
         message = e.message ?: "transport error",
-        details = TransportFailures.details(TransportFailures.classify(e), e.status),
+        details = TransportFailures.details(
+            TransportFailures.classify(e),
+            e.status,
+            e.retryAfterSeconds,
+        ),
     )
 
     /** Decode a bare (non-object) remote value, e.g. a `string | null` or a `boolean`. */
