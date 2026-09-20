@@ -8,7 +8,8 @@ checked against.
 
 | DSH Mobile | Harness version | Status |
 |---|---|---|
-| 0.11.4 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Current target |
+| 0.11.5 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`; also checked against `0.1.6-alpha.2` | Current target. First release whose wire surface is checked against a *running* harness rather than against a description of one — see [Automated conformance](#automated-conformance) |
+| 0.11.4 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | The queue dock is empty against a harness at or past the commit that removed `session/control`'s `queues` map; PTC dispatch metadata renders as raw rows in the transcript |
 | 0.11.3 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Every answered, dismissed or skipped question card sticks: the host never tells the answering client its request resolved, and the card waited for that frame |
 | 0.11.1 – 0.11.2 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | Question answers and approvals are refused by any harness ≥ 0.1.2: `$events/result` was posted without its `args` wrapper |
 | 0.11.0 | 0.1.6-alpha.1 + master `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720` | See [validation](VALIDATION-0.11.0.md) |
@@ -76,6 +77,33 @@ unchanged, so the version policy below applies to it exactly as before.
 The baseline is one constant — `DshCore.PROTOCOL_BASELINE` in
 `core/src/main/kotlin/com/labteto/dshmobile/core/DshCore.kt` — and the app shows
 it in Settings → About next to its own version.
+
+## Automated conformance
+
+From 0.11.5 there is a `:conformance` module that boots a real harness from a checkout, exchanges a
+launch token for a browser session, and drives the shipped client against it. It is opt-in — it
+skips unless `DSH_HARNESS_SRC` names a built checkout — so ordinary CI is unchanged:
+
+```sh
+DSH_HARNESS_SRC=/path/to/deepseek-harness ./gradlew :conformance:test
+```
+
+What it establishes today, against `0.1.6-alpha.2`:
+
+- the launch-token exchange really does buy a session, and that session really does open `/api` —
+  a tier `mock-harness` cannot model, because it implements no `GET /?token=` at all;
+- an unauthenticated call is a 401 and reads as "pair again", not as a broken connection;
+- `$events` opens with a `ready` frame carrying a usable `clientId` and host home;
+- **every endpoint this client calls is understood by the harness** — the gateway matches args
+  against the host method's own parameter names, exactly, so a rename or a moved shape is a refusal
+  the test sees immediately;
+- work waiting behind a busy agent reaches the queue dock through the `inbox` projection.
+
+What it does not yet cover, and what the older caveats still apply to: live assistant streaming,
+tool approvals, question answering against the real acceptance law, attachments, and message
+feedback on a freshly generated reply. The machinery for all of them is in place — the harness's
+own scriptable model server drives a real turn without a paid key — so these are additions rather
+than open questions about feasibility.
 
 ## Version policy
 

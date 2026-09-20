@@ -3,6 +3,70 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.5] - 2026-09-20
+
+### Fixed
+
+- **The queue dock will go empty against a current-master harness.** The harness stopped sending
+  the pending queue: `session/control`'s baseline no longer carries a `queues` map and the
+  `{"type":"queue"}` frame is gone, both deleted upstream in favour of publishing the agent's
+  inbox as an ordinary projection. This app read only the old shapes, so against that harness the
+  dock would have shown nothing at all and edit/remove/steer would have had nothing to act on —
+  silently, because an absent projection and an empty queue look identical. The queue is now read
+  from the `inbox` projection, with the placement the host used to compute derived here instead:
+  work waiting for the next turn is queued, work waiting for the next step is steering when a
+  person wrote it and context when something else did. The old frames are still read, so a harness
+  that still sends them is unaffected.
+- **PTC dispatch metadata was printing into the middle of transcripts.** The fold's list of
+  log-only events named `tool/code-dispatch`, a name the harness had renamed to
+  `tool/ptc-dispatch` before this client's own pinned baseline — so both events fell through to a
+  raw JSON row headed with the event type, in among the actual conversation. Every durable event
+  type the harness declares is now classified deliberately, and a test reads the harness's own
+  generated vocabulary and fails in both directions: on a type it declares that this client has
+  not decided about, and on one this client still names that the harness has dropped. That second
+  direction is the one that had been missing, and it is the one that would have caught this.
+- **A rate limit, a dead relay upstream and an over-large request all reported "this is not a
+  harness"**, which sent people to re-check an address that was never wrong. HTTP 429, 502 and 413
+  now each say what they are, and a 429 carries the peer's `Retry-After` when it stated one.
+- **A single unfamiliar word from a newer harness could blank a whole panel.** A job's status, a
+  preset's trust tier, a goal's phase and a request header's reason were each decoded as a closed
+  set, so a value this build did not know failed the entire enclosing frame rather than the one
+  field — taking every other job, preset or goal with it. Each now degrades to an unknown member,
+  and the surfaces that read them present that honestly rather than guessing: an unknown trust
+  tier shows no badge instead of claiming the person authored the preset.
+
+### Added
+
+- **Terminals opened from the phone are held open.** Current-master harnesses reclaim a terminal
+  after a couple of hours of confirmed idle unless a window is holding it, and following a
+  terminal deliberately does not count as a hold. A visible terminal tab now takes one, so a
+  terminal left open is not collected underneath the person while its tab still looks live. A
+  harness without the endpoint is unaffected.
+
+### Added
+
+- **A conformance suite that runs against a real harness.** `:conformance` boots the harness from a
+  checkout, exchanges a launch token for a browser session, and drives the shipped `:core` client
+  against it — the same transport, envelopes, mux and fold the app uses. Until now every automated
+  check in this repository compared the client to a *description* of the harness: hand-written DTOs,
+  a hand-curated fixture, or `mock-harness`, which is a re-implementation written by reading
+  upstream. A misreading was invisible to all three, because the same misreading sat on both sides
+  of the assertion. One test now makes every call the client knows how to make and asserts the
+  harness understood it, which is how a renamed parameter gets caught here instead of in the field.
+  The suite skips cleanly without a checkout, so ordinary CI is unchanged; see the module's own
+  documentation to run it.
+- Turns can be driven deterministically, using the harness's own scriptable model server, so
+  behaviour that needed a paid API key to observe is testable without one.
+
+### Documentation
+
+- `docs/PROTOCOL.md` corrected against the harness source at both the pinned baseline and current
+  master: the mux heartbeat is 2000 ms and not 30s (and two missed pongs, so about six seconds to
+  a drop); a refused answer batch has no `bad-response` code and never did outside an archived
+  design note; `turnBoundary` is host-side fold state and never crosses the wire; `session/prompt`
+  answers `{accepted: true}` with no `command` slot; and the projection table was missing `inbox`,
+  `agentPreset`, `subagentCatalog`, `subagentTiming` and `subagent`.
+
 ## [0.11.4] - 2026-09-19
 
 ### Fixed
