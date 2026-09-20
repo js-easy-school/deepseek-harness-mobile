@@ -281,14 +281,12 @@ private class FoldState(private val sessionId: String) {
 
             "subagent/descriptor" -> nodes.add(SubagentNode(event.seq, data))
 
-            "session/end-seed", "approval/asked", "approval/decided",
-            "approval/policy", "permission/preset", "sandbox/mode", "schedule/change", "feedback/record",
-            "hook/invoked", "hook/result", "agent-preset/selected", "agent/inbox/spliced",
-            "tool/code-dispatch", "tool/code-dispatch-start", "web/deepseek-search-llm-request",
-            "session/title-llm-request",
-            -> {
-                // Log-only metadata: not chat-renderable; deliberately skipped.
-            }
+            // Log-only metadata: not chat-renderable, and deliberately skipped rather than
+            // dropped — the journal keeps every event, so Trajectory still shows these.
+            // Everything else passes through as an untyped row: the known ones because
+            // presentation labels or hides them, the unknown ones because staying visible is the
+            // compatibility contract. `EventClassification` says which is which.
+            in EventClassification.LOG_ONLY -> Unit
 
             else -> nodes.add(OtherNode(event.seq, event.type, data))
         }
