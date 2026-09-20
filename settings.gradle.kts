@@ -25,3 +25,4 @@ rootProject.name = "dsh-mobile"
 include(":app")
 include(":core")
 include(":mock-harness")
+include(":conformance")
