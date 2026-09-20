@@ -201,6 +201,27 @@ private fun TerminalScreen(store: SessionStore, key: ComposerKey, initial: WebTe
         catch (e: Exception) { error = e.message }
         finally { connected = false; writable = false }
     }
+    // Hold the terminal open for as long as this tab is on screen.
+    //
+    // Current-master hosts reclaim a terminal after a couple of hours of confirmed idle unless
+    // some window is holding it, and `terminal/follow` deliberately does not count — it is a
+    // subscription to the screen, not a claim on the process. Without this a terminal left open on
+    // a phone is collected underneath the person while its tab still looks live.
+    //
+    // The hold is its own stream and carries no data: the first frame is the acknowledgement and
+    // the rest of its life is just staying open. A host that predates the endpoint fails the
+    // stream instead, which is the same "does not offer that" answer a 404 gives elsewhere and is
+    // ignored for the same reason — there is nothing to hold and nothing to tell the person.
+    LaunchedEffect(initial.id, attachmentId, reconnect, connection, store.muxForHost(key.host)) {
+        val mux = store.muxForHost(key.host) ?: return@LaunchedEffect
+        try {
+            mux.openStream("terminal/retain", buildJsonObject {
+                put("sessionId", JsonPrimitive(key.sessionId)); put("id", JsonPrimitive(initial.id))
+            }).collect { /* The stream's existence is the hold; its frames carry nothing to read. */ }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { /* No retention service composed, or the terminal is already gone. */ }
+    }
+
     LaunchedEffect(input, attachmentId) {
         for (message in input) {
             if (!writable) continue
