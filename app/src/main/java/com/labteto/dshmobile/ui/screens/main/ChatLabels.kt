@@ -22,6 +22,8 @@ internal fun goalPhaseLabelRes(phase: GoalPhase): Int = when (phase) {
     GoalPhase.PAUSED -> R.string.goal_phase_paused
     GoalPhase.BLOCKED -> R.string.goal_phase_blocked
     GoalPhase.COMPLETE -> R.string.goal_phase_complete
+    // A phase from a newer harness: show the goal with no phase word rather than an invented one.
+    GoalPhase.UNKNOWN -> R.string.goal_phase_active
 }
 
 internal fun todoStatusDot(status: String): StateDotState = when (status) {
@@ -34,6 +36,8 @@ internal fun jobStatusDot(status: JobStatus): StateDotState = when (status) {
     JobStatus.RUNNING, JobStatus.STOPPING -> StateDotState.Running
     JobStatus.COMPLETED -> StateDotState.Done
     JobStatus.KILLED, JobStatus.FAILED -> StateDotState.Error
+    // Neither running nor settled as far as this build can tell, so claim neither.
+    JobStatus.UNKNOWN -> StateDotState.Idle
 }
 
 @Composable

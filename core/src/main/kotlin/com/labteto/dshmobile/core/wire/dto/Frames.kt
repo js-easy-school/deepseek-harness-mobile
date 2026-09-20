@@ -45,6 +45,16 @@ enum class JobStatus {
 
     @SerialName("failed")
     FAILED,
+
+    /**
+     * A lifecycle state this build does not know.
+     *
+     * The host's status union is closed today, but a new member would otherwise fail the whole
+     * [JobView] and take the rest of the session's job list with it — one unrecognised word
+     * costing every other row. `coerceInputValues` lands here instead, because the field below
+     * defaults to it.
+     */
+    UNKNOWN,
 }
 
 /** One background job as the client sees it. */
@@ -56,8 +66,8 @@ data class JobView(
     @SerialName("kind") val kind: String,
     /** Producer-supplied one-line label: the command, or the delegation description. */
     @SerialName("label") val label: String,
-    /** Current lifecycle state. */
-    @SerialName("status") val status: JobStatus,
+    /** Current lifecycle state; an unrecognised one reads as [JobStatus.UNKNOWN]. */
+    @SerialName("status") val status: JobStatus = JobStatus.UNKNOWN,
     /** Kind-specific status detail ('exit code: 3'), present once the producer supplied one. */
     @SerialName("detail") val detail: String? = null,
     /** Epoch ms when the task was registered. */

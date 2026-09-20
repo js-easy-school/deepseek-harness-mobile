@@ -11,6 +11,15 @@ import kotlinx.serialization.Serializable
 /** Trust tier of an agent preset. */
 @Serializable
 enum class AgentPresetTrust {
+    /**
+     * A trust tier this build does not know.
+     *
+     * Presented as neither shipped nor authored, which is the honest reading: a preset from a tier
+     * this client cannot name should not be labelled as if it came from the person. Failing the row
+     * instead would empty the whole preset roster over one new word.
+     */
+    UNKNOWN,
+
     @SerialName("system")
     SYSTEM,
 
@@ -22,7 +31,7 @@ enum class AgentPresetTrust {
 @Serializable
 data class AgentPresetEntry(
     @SerialName("id") val id: String,
-    @SerialName("trust") val trust: AgentPresetTrust,
+    @SerialName("trust") val trust: AgentPresetTrust = AgentPresetTrust.UNKNOWN,
     @SerialName("isDefault") val isDefault: Boolean,
     @SerialName("name") val name: String? = null,
     @SerialName("description") val description: String? = null,
@@ -62,7 +71,7 @@ data class AgentPresetReadRequest(
 @Serializable
 data class AgentPresetReadValue(
     @SerialName("agentPreset") val agentPreset: String,
-    @SerialName("trust") val trust: AgentPresetTrust,
+    @SerialName("trust") val trust: AgentPresetTrust = AgentPresetTrust.UNKNOWN,
     @SerialName("content") val content: String,
     @SerialName("name") val name: String? = null,
     @SerialName("description") val description: String? = null,
@@ -114,7 +123,7 @@ data class AgentPresetDocument(
     /** The preset the composition belongs to. */
     @SerialName("agentPreset") val agentPreset: String,
     /** Trust of the root this preset was discovered under. */
-    @SerialName("trust") val trust: AgentPresetTrust,
+    @SerialName("trust") val trust: AgentPresetTrust = AgentPresetTrust.UNKNOWN,
     /** The composition exactly as stored. */
     @SerialName("content") val content: String,
     /** Display name the preset published. */
