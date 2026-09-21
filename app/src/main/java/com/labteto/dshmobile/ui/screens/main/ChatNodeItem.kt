@@ -72,7 +72,11 @@ import com.labteto.dshmobile.ui.theme.DsShapes
 import com.labteto.dshmobile.ui.theme.DsTheme
 import com.labteto.dshmobile.ui.theme.DsType
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 /** Everything one transcript row needs that is not on the node itself. */
 internal data class ChatNodeContext(
@@ -440,8 +444,14 @@ private fun ToolCallRow(node: ToolCallNode, context: ChatNodeContext) {
     }
     if (result?.isError == true) {
         // The dot is colour-only, so the word stays — but without a second dot beside it.
+        //
+        // The call's own failure text, not a generic apology: "Something went wrong" told the
+        // reader nothing they could act on, while the result body carries the command's stderr,
+        // the refused path, or the tool's own message. The generic string is only the fallback
+        // for a result that genuinely carries no prose.
+        val failure = remember(result?.content) { toolFailureMessage(result?.content) }
         Text(
-            stringResource(R.string.common_error),
+            failure ?: stringResource(R.string.common_error),
             style = DsType.caption11,
             color = colors.error,
             modifier = Modifier.padding(start = 26.dp),
@@ -551,3 +561,50 @@ private fun WorkflowRow(
         Spacer(Modifier.height(2.dp))
     }
 }
+
+/**
+ * The readable failure text out of a `tool/result` body, or null when it carries none.
+ *
+ * The body is one level deeper than it looks. `ToolResultNode.content` is the message's content
+ * *array*, whose element is a `tool-result` part that holds the actual result parts inside its own
+ * `content` array:
+ *
+ *     [ { type: "tool-result", isError: true,
+ *         content: [ { type: "text", text: "Error: …" } ] } ]
+ *
+ * Reading only the outer array — the obvious first pass — sees a part whose `type` is
+ * `tool-result`, skips it as non-prose, and returns null, so every failure falls back to the
+ * generic string. The walk below therefore recurses through nested `content` arrays and takes the
+ * first `text` part it finds, at any depth.
+ *
+ * A bare string body is accepted too: some tools answer with one.
+ */
+internal fun toolFailureMessage(content: JsonElement?): String? {
+    fun fromText(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** First prose part at or below [element], depth-first, or null. */
+    fun walk(element: JsonElement?): String? = when (element) {
+        null -> null
+        is JsonPrimitive -> fromText(element.contentOrNull)
+        is JsonArray -> element.firstNotNullOfOrNull { walk(it) }
+        is JsonObject -> {
+            val type = element["type"]?.jsonPrimitive?.contentOrNull
+            // A container part (tool-result, or a nesting this build has not seen) is descended
+            // into; a text part ends the search; anything else — an image, a structured blob — is
+            // skipped rather than dumped at the reader.
+            when {
+                type == "text" || (type == null && element.containsKey("text")) ->
+                    fromText(element["text"]?.jsonPrimitive?.contentOrNull)
+                element.containsKey("content") -> walk(element["content"])
+                // A flat error object: take its human-readable field.
+                else -> fromText(
+                    (element["message"] ?: element["error"])?.jsonPrimitive?.contentOrNull,
+                )
+            }
+        }
+        else -> null
+    }
+
+    return walk(content)
+}
+
