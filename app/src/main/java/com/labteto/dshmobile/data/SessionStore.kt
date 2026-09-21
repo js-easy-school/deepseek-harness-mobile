@@ -1399,7 +1399,9 @@ class SessionStore @Inject constructor(
     private fun applyFollowSnapshot(sessionId: String, frame: SessionFollowFrame.Snapshot) {
         clearConnectionError()
         val envelopes = expandRecords(frame.records)
-        val page = historyTail(envelopes)
+        val page = trimToUserPrompt(historyTail(envelopes))
+        // `overDelivered` drives hasMore: the window held more than we are showing, so there is
+        // more history to fetch either by trimming or by the tail window's own bound.
         val overDelivered = envelopes.size > page.size
         synchronized(lock) {
             if (currentId != sessionId) return@synchronized
@@ -1488,6 +1490,13 @@ class SessionStore @Inject constructor(
                     _loadOlderFailed.value = false
                     // Same guard as the opening window, so paging backwards stays bounded instead
                     // of pulling the whole log at once.
+                    //
+                    // Deliberately *not* anchored on a user prompt the way the opening window is:
+                    // paging back asks for the run of events just before what is already loaded,
+                    // and snapping to a prompt here would skip the tail of the previous turn —
+                    // the reasoning and tool calls the reader scrolled up to see. The prompt
+                    // anchor is a rule about where a cold open *starts*, not about what a
+                    // backwards page contains.
                     val envelopes = expandRecords(r.value.records)
                     val page = historyTail(envelopes)
                     val overDelivered = envelopes.size > page.size
@@ -2282,6 +2291,38 @@ class SessionStore @Inject constructor(
      * cannot stall the fold. Anything trimmed is reported as `hasMore`, which is what
      * "Load older" is for.
      */
+    /**
+     * Whether one envelope is a genuine user prompt rather than harness-injected context.
+     *
+     * The harness tags a real prompt with `source.kind` of `user`; everything else
+     * (`agent-instructions`, `skill-invocation`, `goal`, …) is context. Deliberately stricter than
+     * `UserMessageNode.isInjectedContext`: this decides where the transcript *starts*, and an
+     * untagged message must not be mistaken for the reader's own last turn — so unlike the node
+     * predicate, an absent tag is a "no" here rather than a "yes".
+     *
+     * `user-rpc` is not a `source.kind` value — it is a key in the harness's `MessageSourceMap`
+     * whose variant carries `kind: 'user'` itself, so `"user"` covers both paths.
+     */
+    private fun isRealUserPrompt(e: SessionEventEnvelope): Boolean =
+        e.type == "user/message" &&
+            ((e.data as? JsonObject)?.get("source") as? JsonObject)
+                ?.get("kind")?.jsonPrimitive?.contentOrNull == "user"
+
+    /**
+     * Drop everything strictly before the oldest real user prompt in [envelopes].
+     *
+     * The harness opens a window of a fixed number of *events*, and a tool-heavy turn is mostly
+     * events — so a session opened cold used to start mid-tool-call-loop, with the message that
+     * prompted the work somewhere above the fold. Anchoring on the reader's last prompt instead
+     * makes the first screen read as a conversation. No prompt in the window means no anchor, and
+     * the list is returned unchanged rather than emptied.
+     */
+    private fun trimToUserPrompt(envelopes: List<SessionEventEnvelope>): List<SessionEventEnvelope> {
+        val sorted = envelopes.sortedBy { it.seq }
+        val index = sorted.indexOfFirst { isRealUserPrompt(it) }
+        return if (index < 0) sorted else sorted.subList(index, sorted.size)
+    }
+
     private fun historyTail(entries: List<SessionEventEnvelope>): List<SessionEventEnvelope> {
         if (entries.size <= MAX_PAGE_EVENTS) return entries
         var messages = 0
