@@ -166,9 +166,18 @@ class DiscoveryEngine @Inject constructor(
                 TransportFailure.TIMEOUT -> ProbeOutcome.Timeout
                 TransportFailure.DNS -> ProbeOutcome.DnsFailure
                 TransportFailure.UNREACHABLE -> ProbeOutcome.Unreachable
-                TransportFailure.NOT_FOUND, TransportFailure.NOT_A_HARNESS -> ProbeOutcome.NotAHarness
+                // The probe sends no arguments, so nothing it sends can be too large: a 413 here
+                // means whatever is listening is not the harness.
+                TransportFailure.NOT_FOUND, TransportFailure.NOT_A_HARNESS, TransportFailure.TOO_LARGE ->
+                    ProbeOutcome.NotAHarness
                 TransportFailure.TLS -> ProbeOutcome.TlsFailure
-                TransportFailure.OTHER, null -> ProbeOutcome.Other(result.error.message)
+                // A throttle and a dead upstream both describe a real harness address — one asking
+                // us to wait, one with nothing behind it — so neither may read as "not a harness",
+                // which is the one verdict that sends someone to re-check the address. Their own
+                // carrier wording already says which, so it is what gets shown.
+                TransportFailure.RATE_LIMITED, TransportFailure.UPSTREAM_DOWN,
+                TransportFailure.OTHER, null,
+                -> ProbeOutcome.Other(result.error.message)
             }
         }
     }

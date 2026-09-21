@@ -128,9 +128,14 @@ sealed interface ConnectFailure {
             TransportFailure.REFUSED -> Refused
             TransportFailure.TIMEOUT, TransportFailure.UNREACHABLE -> Timeout
             TransportFailure.DNS -> DnsFailure
-            TransportFailure.NOT_FOUND, TransportFailure.NOT_A_HARNESS -> NotAHarness
+            // A no-argument call cannot be refused as too large, so 413 is something that is not
+            // the harness. A throttle and a dead upstream, by contrast, are real harness addresses
+            // and carry wording that says so, so they keep their message instead of being flattened
+            // into "not a harness" and sending the person to re-check an address that was right.
+            TransportFailure.NOT_FOUND, TransportFailure.NOT_A_HARNESS, TransportFailure.TOO_LARGE -> NotAHarness
             TransportFailure.TLS -> TlsFailure
-            TransportFailure.OTHER -> message?.takeIf { it.isNotBlank() }?.let { Other(it) } ?: fallback
+            TransportFailure.RATE_LIMITED, TransportFailure.UPSTREAM_DOWN, TransportFailure.OTHER ->
+                message?.takeIf { it.isNotBlank() }?.let { Other(it) } ?: fallback
             null -> fallback
         }
     }

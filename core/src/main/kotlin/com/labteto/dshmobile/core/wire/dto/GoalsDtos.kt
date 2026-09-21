@@ -13,6 +13,9 @@ import kotlinx.serialization.json.JsonElement
 /** Durable continuation phase. */
 @Serializable
 enum class GoalPhase {
+    /** A phase this build does not know; shown without a verdict rather than failing the goal. */
+    UNKNOWN,
+
     @SerialName("active")
     ACTIVE,
 
@@ -52,7 +55,7 @@ data class GoalSnapshot(
     /** Human-requested completion objective. */
     @SerialName("objective") val objective: String,
     /** Durable lifecycle phase. */
-    @SerialName("phase") val phase: GoalPhase,
+    @SerialName("phase") val phase: GoalPhase = GoalPhase.UNKNOWN,
     /** Present exactly while `phase` is `blocked`. */
     @SerialName("blockedReason") val blockedReason: GoalBlockReason? = null,
     /** Total admitted goal-round cap. */
@@ -164,7 +167,7 @@ data class GoalView(
     @SerialName("id") val id: String,
     @SerialName("revision") val revision: Int,
     @SerialName("objective") val objective: String,
-    @SerialName("phase") val phase: GoalPhase,
+    @SerialName("phase") val phase: GoalPhase = GoalPhase.UNKNOWN,
     @SerialName("blockedReason") val blockedReason: GoalBlockReason? = null,
     @SerialName("maxGoalRounds") val maxGoalRounds: Int,
     /** Highest admitted round number for this goal. */

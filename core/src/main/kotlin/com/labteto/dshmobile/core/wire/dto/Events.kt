@@ -400,6 +400,9 @@ enum class RequestHeaderReason {
 
     @SerialName("change")
     CHANGE,
+
+    /** A reason this build does not know; the header still reads, only its motive is unnamed. */
+    UNKNOWN,
 }
 
 /** A 1-based inclusive seq span (used by compaction records). */
@@ -577,7 +580,7 @@ data class TodoWriteData(
 @Serializable
 data class RequestHeaderData(
     @SerialName("header") val header: EpochHeader,
-    @SerialName("reason") val reason: RequestHeaderReason,
+    @SerialName("reason") val reason: RequestHeaderReason = RequestHeaderReason.UNKNOWN,
 )
 
 /** `request/context` payload — route metadata for the next request. */

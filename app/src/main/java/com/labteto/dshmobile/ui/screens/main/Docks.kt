@@ -121,6 +121,7 @@ internal fun GoalBar(goal: GoalSnapshot, store: SessionStore, modifier: Modifier
                 GoalPhase.BLOCKED -> com.labteto.dshmobile.ui.components.StateDotState.Warning
                 GoalPhase.COMPLETE -> com.labteto.dshmobile.ui.components.StateDotState.Done
                 GoalPhase.PAUSED -> com.labteto.dshmobile.ui.components.StateDotState.Idle
+                GoalPhase.UNKNOWN -> com.labteto.dshmobile.ui.components.StateDotState.Idle
             },
             size = 8.dp,
         )
@@ -157,7 +158,9 @@ internal fun GoalBar(goal: GoalSnapshot, store: SessionStore, modifier: Modifier
                             scope.launch { store.goalAction("resume") }
                         },
                     )
-                    GoalPhase.COMPLETE -> Unit
+                    // Nothing to pause or resume: a finished goal has no next state, and a phase
+                    // from a newer harness has none this build can name. Edit and clear stay.
+                    GoalPhase.COMPLETE, GoalPhase.UNKNOWN -> Unit
                 }
                 add(MenuItem(stringResource(R.string.goal_edit)) { editing = true })
                 add(

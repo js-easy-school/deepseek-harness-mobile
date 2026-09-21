@@ -102,8 +102,10 @@ composer, but the client refuses first so the draft and the attachments survive
 a refusal. Sub-command grammar stays with the host: `/plan off` and `/goal
 pause` answer with an ordinary error result rather than being adjudicated here.
 
-The `command` slot on `session/prompt`'s response, and the `unknown-command` /
-`command-error` codes, are dead schema the host never populates.
+`session/prompt` answers `{accepted: true}` and nothing else. Through 0.11.4 this
+document described a `command` slot on that response, and `unknown-command` /
+`command-error` codes, as dead schema the host never populates; in the current
+types there is no such slot and there are no such codes.
 
 ### Files (no envelope on the way up)
 
@@ -200,8 +202,11 @@ string (`allowed-once` | `rejected`), a question answers the answer object.
 The payload is parsed with a schema that **strips** undeclared keys rather than
 rejecting them, so a misplaced field does not fail — it vanishes, and the answer
 is accepted without it. Then every clause below must hold, or the whole batch
-comes back `bad-response` with the wait still open and the tool call still
-blocked:
+is refused with the wait still open and the tool call still blocked. (Through
+0.11.4 this document named that refusal `bad-response`. No such code exists in
+the harness at the pinned baseline or at current master — only in two archived
+design notes — so the client must read the refusal as "refused", not match a
+string.):
 
 - one answer per question, **in request order**; the host pairs them by position
   and compares each `id`, so a partial or reordered batch is refused;
@@ -250,10 +255,14 @@ Host → client:
 {"type":"end","streamId":"1"}
 ```
 
-The host sends RFC 6455 Ping every `websocketHeartbeatIntervalMs` (30s default)
-and the platform answers Pong at the protocol layer, so idle liveness needs no
-application frame. Since 0.1.3 the host terminates a socket that misses two
-pongs in a row; OkHttp answers every ping, so a healthy link never sees that.
+The host sends RFC 6455 Ping every `websocketHeartbeatIntervalMs` — **2000 ms**
+by default (`packages/api/gateway/src/index.ts`), and the shipped web
+composition does not override it — and the platform answers Pong at the protocol
+layer, so idle liveness needs no application frame. The host terminates a socket
+that misses two pongs in a row, so a dead link is dropped about six seconds in.
+OkHttp answers every ping, so a healthy one never sees that. This document said
+30s through 0.11.4; a ping every two seconds is a materially different fact for a
+phone's radio, and it is the host's, not something this client can tune.
 
 The streams this app opens:
 
@@ -418,7 +427,14 @@ watermark.
 | `imageLimits` | `{maxImageBytes, maxImagesPerMessage, maxMessageImageBytes, maxImagePixels, maxImageDimension, mediaTypes}` — the host's own attachment bounds, all of them enforced before upload; `maxImageDimension` is a per-side cap added in harness 0.1.0-rc.8, and 0.1.1-rc.2 raised every shipped bound (20MB per image, 200MB per message, 64M pixels, 8192px per side). Files have no published bound; the host refuses on upload |
 | `modelSelection` | `{lastUsed, next}` — this session's durable model choice. The catalog lives at `session/modelCatalog` and describes the *host generation*, so the per-session selection lives here. `next` wins when present |
 | `goal`, `todos`, `plan`, `title`, `sessionListMetadata` | the docks and list metadata |
-| `turnOutline`, `schedule`, `turnBoundary` | new in 0.1.2–0.1.3; carried but not yet read by this client |
+| `inbox` | `{"next-turn": [UserMessage], "next-step": [UserMessage]}` — the agent's pending input, and the queue dock's source since current master deleted `session/control`'s `queues` map and its `queue` frame. Placement is the client's to derive: next-turn is `queued`, next-step is `steering` from a `user` source and `context` otherwise |
+| `agentPreset` | `string \| null` — the preset this session runs |
+| `subagentCatalog`, `subagentTiming`, `subagent` | the child roster, a child's active-turn duration, and a descriptor-backed child's identity |
+| `turnOutline`, `schedule` | new in 0.1.2–0.1.3; carried but not yet read by this client |
+
+`turnBoundary` is **not** on this list, though 0.11.4 said it was: it is declared
+in `SessionProjectionStateMap` only, which is host-side fold state, so it never
+crosses the wire.
 
 An absent key means the harness composes no such service; clients hide the
 control rather than showing a dead one.

@@ -93,15 +93,16 @@ internal fun PresetsSheet(
                                     else -> colors.labelTertiary
                                 },
                             )
-                            Spacer(Modifier.width(DsSpacing.small))
-                            DsPill(
-                                text = stringResource(
-                                    when (entry.trust) {
-                                        AgentPresetTrust.SYSTEM -> R.string.presets_system
-                                        AgentPresetTrust.USER -> R.string.presets_user
-                                    },
-                                ),
-                            )
+                            when (entry.trust) {
+                                AgentPresetTrust.SYSTEM -> R.string.presets_system
+                                AgentPresetTrust.USER -> R.string.presets_user
+                                // A tier this build cannot name is better left unlabelled than
+                                // mislabelled as something the person authored themselves.
+                                AgentPresetTrust.UNKNOWN -> null
+                            }?.let { trustLabel ->
+                                Spacer(Modifier.width(DsSpacing.small))
+                                DsPill(text = stringResource(trustLabel))
+                            }
                             if (entry.isDefault) {
                                 Spacer(Modifier.width(DsSpacing.tiny))
                                 DsPill(text = stringResource(R.string.presets_default))

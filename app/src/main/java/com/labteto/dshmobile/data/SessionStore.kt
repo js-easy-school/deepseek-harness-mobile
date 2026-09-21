@@ -46,6 +46,7 @@ import com.labteto.dshmobile.core.wire.dto.QueueAction
 import com.labteto.dshmobile.core.wire.dto.ModelSelectionProjection
 import kotlinx.coroutines.flow.combine
 import com.labteto.dshmobile.core.wire.dto.ModelCatalog
+import com.labteto.dshmobile.core.wire.dto.InboxProjection
 import com.labteto.dshmobile.core.wire.dto.QueuedInboxItem
 import com.labteto.dshmobile.core.wire.dto.RemoteEventFrame
 import com.labteto.dshmobile.core.wire.dto.RemoteEventOutcome
@@ -263,6 +264,9 @@ data class PendingQuestions(
  */
 internal fun nextHasMore(freshCount: Int, hostHasMore: Boolean, overDelivered: Boolean): Boolean =
     freshCount > 0 && (hostHasMore || overDelivered)
+
+/** Projection key carrying the agent's pending input; the queue dock's source since 0.1.6-alpha.2. */
+private const val INBOX_PROJECTION = "inbox"
 
 /**
  * Single source of truth for the connected harness's live state. All public surface is
@@ -718,7 +722,12 @@ class SessionStore @Inject constructor(
                 refreshAgentPresets()
                 refreshCommands()
             }
-            else -> Unit
+            // The rest of the host's allowlist is either developer tooling (`cordis/*`), or a
+            // change this client already learns from a projection, or a surface it does not
+            // present — settings and credentials among them, which is why nothing here goes stale
+            // when they change. Naming the unhandled one in the log is what makes the next gap
+            // findable; dropping it silently is how `goal/activation-changed` went unnoticed.
+            else -> log("unhandled emit $event")
         }
     }
 
@@ -807,7 +816,10 @@ class SessionStore @Inject constructor(
     private fun handleControlFrame(frame: SessionControlFrame) {
         when (frame) {
             is SessionControlFrame.Baseline -> {
-                queuesBySession.value = frame.value.queues.mapValues { (_, items) -> items.map(::queuedInboxItemToQueueItem) }
+                // A host that still computes queues wins for the sessions it names; every other
+                // session's pending work is rebuilt from its own `inbox` projection.
+                val legacy = frame.value.queues.mapValues { (_, items) -> items.map(::queuedInboxItemToQueueItem) }
+                queuesBySession.value = inboxQueuesFrom(frame.value.projections) + legacy
                 val sid = synchronized(lock) { currentId } ?: return
                 frame.value.queues[sid]?.let { items -> applyQueue(sid, items) }
                 frame.value.jobs[sid]?.let { jobs -> applyJobs(sid, jobs) }
@@ -815,15 +827,36 @@ class SessionStore @Inject constructor(
             }
             is SessionControlFrame.Queue -> applyQueue(frame.sessionId, frame.items)
             is SessionControlFrame.Jobs -> applyJobs(frame.sessionId, frame.jobs)
-            is SessionControlFrame.Projection -> synchronized(lock) {
-                if (frame.sessionId == currentId) {
-                    mergeProjectionLocked(frame.key, frame.seq, frame.value)
-                    rebuildCurrentLocked()
+            is SessionControlFrame.Projection -> {
+                // The inbox projection is the queue now, and it arrives for every live session —
+                // not just the open one — so the chat list's per-session dock reads it here.
+                if (frame.key == INBOX_PROJECTION) {
+                    val items = InboxProjection.itemsFrom(frame.value).map(::queuedInboxItemToQueueItem)
+                    queuesBySession.value = queuesBySession.value + (frame.sessionId to items)
+                }
+                synchronized(lock) {
+                    if (frame.sessionId == currentId) {
+                        mergeProjectionLocked(frame.key, frame.seq, frame.value)
+                        rebuildCurrentLocked()
+                    }
                 }
             }
             is SessionControlFrame.Unknown -> log("unknown control frame ${frame.type}")
         }
     }
+
+    /**
+     * Rebuild every named session's pending queue from its projection baseline.
+     *
+     * The baseline's per-session block is `{asOfSeq, values}`; a session whose composition
+     * publishes no inbox is simply absent, which reads as "nothing pending" rather than as an
+     * error, exactly as an absent projection key does everywhere else.
+     */
+    private fun inboxQueuesFrom(projections: Map<String, JsonObject>): Map<String, List<QueueItem>> =
+        projections.mapNotNull { (sessionId, block) ->
+            val inbox = (block["values"] as? JsonObject)?.get(INBOX_PROJECTION) ?: return@mapNotNull null
+            sessionId to InboxProjection.itemsFrom(inbox).map(::queuedInboxItemToQueueItem)
+        }.toMap()
 
     private fun applyQueue(sessionId: String, items: List<QueuedInboxItem>) {
         queuesBySession.value = queuesBySession.value + (sessionId to items.map(::queuedInboxItemToQueueItem))
@@ -1158,11 +1191,20 @@ class SessionStore @Inject constructor(
         val snapshot = EventFold(sid).fold(events, liveAssistant.transientEnvelopes())
         val blank = if (events.isEmpty()) currentBlank else snapshot.blank
         val running = runningBySession[sid] ?: snapshot.running
+        // The queue is the `inbox` projection wherever the host publishes one — it reaches us from
+        // both the control stream and the follow snapshot, whichever is ahead. `currentQueue` is
+        // the older `session/control` queue frame, kept for a host that still sends them.
+        val inbox = currentProjections[INBOX_PROJECTION]?.value
+        val queue = if (inbox != null) {
+            InboxProjection.itemsFrom(inbox).map(::queuedInboxItemToQueueItem)
+        } else {
+            currentQueue
+        }
         val merged = snapshot.copy(
             blank = blank,
             running = running,
             hasMore = currentHasMore,
-            queue = currentQueue,
+            queue = queue,
             projections = currentProjections.mapValues { it.value.value },
         )
         _currentConversation.value = merged
