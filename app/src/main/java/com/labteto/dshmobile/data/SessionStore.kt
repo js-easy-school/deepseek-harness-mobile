@@ -400,7 +400,12 @@ class SessionStore @Inject constructor(
 
     val permissions: StateFlow<PermissionSelect?> = combine(
         projectionOf(PermissionSelect.serializer(), "permissions"), permissionCatalog,
-    ) { selection, catalog -> selection?.copy(options = catalog?.options ?: emptyList()) }
+    ) { selection, catalog ->
+        // The projection carries its own options; the catalog RPC (permissionPresets/catalog) is a
+        // newer host endpoint that 404s on older deployments. When it is absent, keep what the
+        // projection already has rather than blanking it.
+        selection?.copy(options = catalog?.options ?: selection.options)
+    }
         .stateIn(scope, SharingStarted.Eagerly, null)
     val sessionStats: StateFlow<SessionStatsView?> = projectionOf(SessionStatsView.serializer(), "sessionStats")
     val tokenUsage: StateFlow<TokenUsageView?> = projectionOf(TokenUsageView.serializer(), "tokenUsage")
