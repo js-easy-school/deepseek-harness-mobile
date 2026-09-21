@@ -124,7 +124,16 @@ internal fun ChatNodeItem(node: ChatNode, context: ChatNodeContext) {
                 }
             }
             val text = node.displayText()
-            if (text.isNotBlank()) UserBubble(text)
+            if (text.isNotBlank()) {
+                // Injected context is not the reader's turn: it goes in a collapsed disclosure row
+                // so the conversation still reads as a conversation. The predicate lives on the
+                // node (core) because it is a wire fact about `source.kind`, not a UI choice.
+                if (node.isInjectedContext) {
+                    InjectedContextRow(node, text)
+                } else {
+                    UserBubble(text)
+                }
+            }
         }
 
         is AssistantMessageNode -> AssistantMessage(node, context)
@@ -608,3 +617,24 @@ internal fun toolFailureMessage(content: JsonElement?): String? {
     return walk(content)
 }
 
+/**
+ * Harness-injected context, folded into one disclosure row.
+ *
+ * Rendered as a collapse rather than a bubble because it is not the reader's turn: a system
+ * prompt, an agent-instruction block or a skill invocation put on the user's side of the
+ * conversation reads as though they had typed it. The row states the source kind so the reader can
+ * tell which kind of context it is without expanding it.
+ */
+@Composable
+private fun InjectedContextRow(node: UserMessageNode, text: String) {
+    var expanded by remember(node.seq) { mutableStateOf(false) }
+    DisclosureRow(
+        title = stringResource(R.string.chat_context_title),
+        summary = node.sourceKind ?: text.take(80),
+        icon = FeatherIcons.Info,
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    ) {
+        MarkdownText(text)
+    }
+}
