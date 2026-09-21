@@ -473,4 +473,5 @@
     <string name="system_prompt">সিস্টেম নির্দেশনা</string>
     <string name="image_offload">অনুরোধ থেকে পুরোনো ছবি বাদ দেওয়া হয়েছে</string>
     <string name="panel_open_host">হোস্টে খুলুন</string>
+    <string name="tool_copy_code">কোড কপি করুন</string>
 </resources>

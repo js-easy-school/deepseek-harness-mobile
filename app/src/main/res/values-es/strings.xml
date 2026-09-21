@@ -473,4 +473,5 @@
     <string name="system_prompt">Instrucciones del sistema</string>
     <string name="image_offload">Imágenes históricas omitidas de la solicitud</string>
     <string name="panel_open_host">Abrir en el host</string>
+    <string name="tool_copy_code">Copiar código</string>
 </resources>

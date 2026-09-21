@@ -473,4 +473,5 @@
     <string name="system_prompt">सिस्टम निर्देश</string>
     <string name="image_offload">अनुरोध से पुरानी छवियाँ हटाई गईं</string>
     <string name="panel_open_host">होस्ट पर खोलें</string>
+    <string name="tool_copy_code">कोड कॉपी करें</string>
 </resources>

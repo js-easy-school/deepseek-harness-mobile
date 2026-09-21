@@ -473,4 +473,5 @@
     <string name="system_prompt">คำสั่งระบบ</string>
     <string name="image_offload">ละภาพในประวัติออกจากคำขอ</string>
     <string name="panel_open_host">เปิดบนโฮสต์</string>
+    <string name="tool_copy_code">คัดลอกโค้ด</string>
 </resources>

@@ -475,4 +475,5 @@
     <string name="system_prompt">System prompt</string>
     <string name="image_offload">Historical images omitted from request</string>
     <string name="panel_open_host">Open on host</string>
+    <string name="tool_copy_code">Copy code</string>
 </resources>
