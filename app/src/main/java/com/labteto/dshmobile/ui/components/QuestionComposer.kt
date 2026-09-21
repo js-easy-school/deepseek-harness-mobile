@@ -283,14 +283,19 @@ private fun QuestionHeader(
                 question.header?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = DsType.caption11, color = colors.labelTertiary)
                 }
-                Text(
-                    question.question,
-                    style = DsType.std14Strong,
-                    color = colors.labelPrimary,
-                    // A collapsed strip taller than the expanded card's header is not a collapse.
-                    maxLines = if (minimized) 2 else Int.MAX_VALUE,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // Only while collapsed. Expanded, the question belongs to the scrolling body: it
+                // is content, and the header is chrome that must stay small enough for the answer
+                // controls below it to survive a cramped card. See [QuestionBody].
+                if (minimized) {
+                    Text(
+                        question.question,
+                        style = DsType.std14Strong,
+                        color = colors.labelPrimary,
+                        // A collapsed strip taller than the expanded card's header is not a collapse.
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
         if (count > 1) {
@@ -326,6 +331,22 @@ private fun QuestionBody(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The question itself leads the scrolling content rather than sitting in the fixed header.
+        //
+        // The card is a Column of header, weighted body and footer, and a Compose Column measures
+        // its non-weighted children first — so whatever the header asks for, the footer takes from
+        // what is left and the body divides the remainder. An unbounded question in the header
+        // could therefore ask for the entire cap, and once a keyboard shrank the column and the cap
+        // was recomputed, a prompt of a few lines did exactly that: the card rendered as its
+        // question and nothing else, with no field to type in and no Submit or Skip to resolve it
+        // with (#31). Down here the same text can be as long as it likes, because the body is the
+        // part that scrolls.
+        Text(
+            question.question,
+            style = DsType.std14Strong,
+            color = DsTheme.colors.labelPrimary,
+        )
+
         question.detail?.takeIf { it.isNotBlank() }?.let { MarkdownText(it) }
 
         options.forEachIndexed { ordinal, option ->
