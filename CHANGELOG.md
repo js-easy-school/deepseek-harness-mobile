@@ -3,6 +3,54 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.7] - 2026-09-21
+
+Contributions from @snailium, offered from a long-lived fork and split into reviewable pieces.
+
+### Fixed
+
+- **A failed tool call said "Something went wrong" and nothing else.** The result body carries the
+  command's stderr, the path it was refused, or the tool's own message, and none of it was shown. A
+  failure now shows its own text, with the generic string kept only for a result that genuinely
+  carries no prose. The body is one level deeper than it looks: the message's content array holds a
+  `tool-result` part whose own content array holds the actual prose, so reading only the outer array
+  found a part it classified as non-prose and fell back every single time. A failed call also shows
+  how long it ran. (#35)
+- **Harness-injected context was rendered as though you had typed it.** Agent instructions, skill
+  invocations, goals, team messages and the rest arrived as `user/message` events and got the
+  reader's own bubble, which put a wall of configuration text on their side of the conversation. Those
+  now collapse into a disclosure row. The test is a denylist of the one `source.kind` that means a
+  person wrote it rather than an allowlist of injected kinds, because a kind this build has never seen
+  is far likelier to be new harness context than a new way for someone to speak. (#35)
+- **Opening a cold session started mid-tool-call.** The opening window now begins at the oldest real
+  prompt, so a transcript opens on something a person said. Deliberately not applied to backwards
+  paging: paging asks for the events just before what is loaded, and snapping to a prompt there would
+  swallow the tail of the previous turn. (#35)
+- **The permission picker was empty against a host that composes no catalog.** Combining the two
+  sources overwrote the projection's own options with the catalog's, so a `permissionPresets/catalog`
+  that answers 404 left nothing to choose from. The catalog is preferred only when it returned
+  something. (#35)
+
+### Added
+
+- **Markdown tables, task lists and horizontal rules, and syntax highlighting in code blocks.**
+  Tables render as a real grid with per-column alignment, task-list items get a checkbox marker and
+  strike through when done. (#36)
+- The Markdown parser and a syntax-highlighting lexer moved into `:core` as plain JVM code, leaving
+  the app file to turn blocks into composables. A renderer carrying its own grammar means every
+  change rewrites parsing and drawing together. Highlighting never alters the code's characters,
+  which is asserted for a known language, an unknown one and an empty string, and an unrecognised
+  language degrades to plain spans rather than throwing. (#36)
+- Links in replies open in a browser only for `http` and `https`. Anything else is treated as a path
+  into the session's own workspace, where the harness enforces its own boundary, so a reply cannot
+  smuggle another scheme past the click handler. (#36)
+
+### Internal
+
+- The conformance module reports why the mock model server would not start, and survives the Windows
+  command line when a scripted tool call carries JSON. Both were found by using the suite rather than
+  by reading it. (#34)
+
 ## [0.11.6] - 2026-09-21
 
 ### Fixed
