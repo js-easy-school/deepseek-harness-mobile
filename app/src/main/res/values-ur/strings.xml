@@ -473,4 +473,5 @@
     <string name="system_prompt">سسٹم ہدایات</string>
     <string name="image_offload">درخواست سے پرانی تصاویر خارج کی گئیں</string>
     <string name="panel_open_host">ہوسٹ پر کھولیں</string>
+    <string name="tool_copy_code">کوڈ کاپی کریں</string>
 </resources>

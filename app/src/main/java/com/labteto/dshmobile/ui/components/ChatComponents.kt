@@ -21,6 +21,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +55,16 @@ import java.util.Locale
  * The cap mirrors the harness's `max-width: min(525px, 82%)`, which is why this measures its parent
  * rather than hardcoding a dp: a flat 320dp was most of a phone's width and none of a tablet's.
  */
+
+/**
+ * A shared dismiss token for text selections in the transcript.
+ *
+ * Tapping any row increments it; selectable components observe it and clear their selection when
+ * it changes. This Compose version's SelectionContainer has no built-in "tap outside to clear", so
+ * the transcript opts in by wiring this token through every row.
+ */
+val LocalSelectionDismiss = staticCompositionLocalOf { mutableIntStateOf(0) }
+
 @Composable
 fun UserBubble(text: String, modifier: Modifier = Modifier) {
     val colors = DsTheme.colors

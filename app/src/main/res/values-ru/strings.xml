@@ -473,4 +473,5 @@
     <string name="system_prompt">Системные инструкции</string>
     <string name="image_offload">Из запроса исключены прежние изображения</string>
     <string name="panel_open_host">Открыть на хосте</string>
+    <string name="tool_copy_code">Копировать код</string>
 </resources>

@@ -473,4 +473,5 @@
     <string name="system_prompt">系统提示词</string>
     <string name="image_offload">请求中已省略历史图片</string>
     <string name="panel_open_host">在主机上打开</string>
+    <string name="tool_copy_code">复制代码</string>
 </resources>

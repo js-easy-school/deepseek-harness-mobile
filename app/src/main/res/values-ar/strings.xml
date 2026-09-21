@@ -473,4 +473,5 @@
     <string name="system_prompt">تعليمات النظام</string>
     <string name="image_offload">تم حذف الصور السابقة من الطلب</string>
     <string name="panel_open_host">فتح على المضيف</string>
+    <string name="tool_copy_code">نسخ الكود</string>
 </resources>
