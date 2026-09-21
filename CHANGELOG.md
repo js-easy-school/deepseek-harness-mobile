@@ -3,6 +3,32 @@
 All notable changes to DSH Mobile are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); the project uses SemVer.
 
+## [0.11.6] - 2026-09-21
+
+### Fixed
+
+- **A long question left its card with no way to answer it.** Opening the keyboard on an
+  `ask_user_question` card could take away the answer field, Submit and Skip together, leaving the
+  question text and nothing else. With no Submit and no Skip there was no way to resolve the request
+  from the card at all while the keyboard was up.
+
+  The card is a header, a scrolling body and a footer, capped at a fraction of the height it is
+  offered. Only the body was weighted, and a Compose column measures its unweighted children first,
+  so the header took what it asked for and the footer and body divided whatever was left. The
+  header's question text was unbounded, so it asked for as many lines as it had. With the keyboard
+  down that was fine. With the keyboard up, the cap was recomputed against a much shorter column and
+  a question of a few lines could ask for all of it.
+
+  The question now leads the scrolling body instead of sitting in the fixed header, so the header
+  stays small and the footer cannot be starved. Collapsed cards still show the question in the
+  header, capped at two lines as before. On a card short enough that the question fills the body the
+  field may sit below the fold, which is what a scroll is for: it is reachable, and focusing it
+  brings it into view.
+
+  Reported by @djurcola (#31), whose description named the symptom precisely enough to find it:
+  prompt text only, field and Skip/Submit gone. Six earlier attempts missed it because every test
+  written for it used a one-line question, and the length of the question was the whole cause.
+
 ## [0.11.5] - 2026-09-20
 
 ### Fixed
