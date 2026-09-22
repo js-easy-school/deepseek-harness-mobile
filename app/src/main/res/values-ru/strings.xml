@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">Автоподключение к сопряжённому реле по Wi-Fi</string>
     <string name="connect_fail_pairing_title">Реле отклонило это устройство</string>
     <string name="connect_fail_pairing">Реле больше не принимает токен этого устройства. Он мог истечь или быть отозван в списке устройств реле. Выполните сопряжение заново, чтобы получить новый.</string>
+    <string name="connect_fail_relay_session_title">У реле нет сессии с harness</string>
+    <string name="connect_fail_relay_session">%1$s достучалось до harness, но harness ответил 401: у реле не было собственной браузерной сессии, чтобы представиться, поэтому отклонялся каждый запрос через него. Это не токен этого устройства, и повторное сопряжение ничего не изменит. Обновите dsh-relay на том компьютере — пакет 0.2.1 в npm опубликован без подписи сессии — либо поставьте его из исходников: dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
     <string name="connect_fail_certificate_title">Ключ этого реле изменился</string>
     <string name="connect_fail_certificate">%1$s предъявил ключ, отличный от сохранённого при сопряжении. Так бывает, когда реле пересоздаёт сертификат после смены сети, — но выглядит это точно так же, как если бы по этому адресу отвечало что-то другое. Выполняйте сопряжение заново, только если вы этого ожидали.</string>
     <string name="connect_pair_again">Сопрячь заново</string>

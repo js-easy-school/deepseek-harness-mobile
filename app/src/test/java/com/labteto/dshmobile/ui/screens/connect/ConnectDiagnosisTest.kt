@@ -142,6 +142,50 @@ class ConnectDiagnosisTest {
         )
     }
 
+    /**
+     * A relay answers 403, never 401 — so a 401 behind one is the harness refusing the relay's own
+     * upstream request, which is the relay's browser session and not this device's token. Telling
+     * the two apart matters because "pair again" cannot fix the second one: the device was never
+     * the problem, and the person is sent to a pairing page that will keep succeeding.
+     */
+    @Test
+    fun `a 401 through a relay is the relay's own session, not this device's token`() {
+        assertEquals(
+            ConnectFailure.RelayUnauthenticated,
+            ConnectFailure.from(ProbeOutcome.RelayUnauthenticated),
+        )
+        assertEquals(
+            ConnectFailure.RelayUnauthenticated,
+            ConnectFailure.from(ProbeOutcome.Unauthenticated, relay = true),
+        )
+        assertEquals(
+            ConnectFailure.RelayUnauthenticated,
+            ConnectFailure.from(
+                GenerationFailure.MuxFailed(TransportFailure.UNAUTHENTICATED, "401"),
+                relay = true,
+            ),
+        )
+        val unauthenticated = RpcError(
+            code = "unauthenticated",
+            message = "harness has no browser session for this client (HTTP 401)",
+            details = TransportFailures.details(TransportFailure.UNAUTHENTICATED, 401),
+        )
+        assertEquals(
+            ConnectFailure.RelayUnauthenticated,
+            ConnectFailure.from(GenerationFailure.ReadyFailed(unauthenticated), relay = true),
+        )
+    }
+
+    /** The same 401 with no relay in front stays the harness's own missing browser session. */
+    @Test
+    fun `a 401 from a plain harness is still unauthenticated`() {
+        assertEquals(ConnectFailure.Unauthenticated, ConnectFailure.from(ProbeOutcome.Unauthenticated))
+        assertEquals(
+            ConnectFailure.Unauthenticated,
+            ConnectFailure.from(GenerationFailure.MuxFailed(TransportFailure.UNAUTHENTICATED, "401")),
+        )
+    }
+
     /** The probe can decide this itself when it already knows the address is a relay. */
     @Test
     fun `relay-specific probe outcomes map straight through`() {

@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">在 Wi-Fi 下自动连接已配对的中继</string>
     <string name="connect_fail_pairing_title">中继拒绝了本设备</string>
     <string name="connect_fail_pairing">中继不再接受本设备的令牌。它可能已过期，或已在中继的设备列表中被吊销。请重新配对以获取新令牌。</string>
+    <string name="connect_fail_relay_session_title">中继没有与 harness 的会话</string>
+    <string name="connect_fail_relay_session">%1$s 已到达 harness，但 harness 返回了 401：中继没有自己的浏览器会话可以用来表明身份，因此经它转发的每个请求都被拒绝了。这不是本设备的令牌，重新配对也不会有任何改变。请更新那台电脑上的 dsh-relay——npm 上的 0.2.1 包在发布时缺少会话签名——或从源码安装：dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
     <string name="connect_fail_certificate_title">该中继的密钥已更改</string>
     <string name="connect_fail_certificate">%1$s 出示的密钥与本设备配对时保存的不一致。中继在更换网络后重新生成证书时会这样，但这与另一台机器冒名应答在该地址上看起来一模一样。只有在你预料到的情况下才重新配对。</string>
     <string name="connect_pair_again">重新配对</string>

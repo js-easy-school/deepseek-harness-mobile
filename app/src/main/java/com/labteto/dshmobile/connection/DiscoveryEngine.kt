@@ -159,8 +159,11 @@ class DiscoveryEngine @Inject constructor(
                 // fact — no browser session — which is its own outcome rather than a fence.
                 TransportFailure.TRUST_FENCE ->
                     if (relay) ProbeOutcome.PairingRequired else ProbeOutcome.TrustFence
+                // The same 401 behind a relay is one hop further out: the relay accepted this
+                // device — it answers 403 when it does not — and the harness refused the relay's
+                // own request, so there is nothing here for this phone to pair again.
                 TransportFailure.UNAUTHENTICATED ->
-                    if (relay) ProbeOutcome.PairingRequired else ProbeOutcome.Unauthenticated
+                    if (relay) ProbeOutcome.RelayUnauthenticated else ProbeOutcome.Unauthenticated
                 TransportFailure.CERTIFICATE_PIN -> ProbeOutcome.CertificateChanged
                 TransportFailure.REFUSED -> ProbeOutcome.Refused
                 TransportFailure.TIMEOUT -> ProbeOutcome.Timeout

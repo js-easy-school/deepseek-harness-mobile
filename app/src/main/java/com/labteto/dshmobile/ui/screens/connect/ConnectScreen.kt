@@ -673,6 +673,8 @@ private fun ConnectFailureBlock(
     val title = when {
         failure is ConnectFailure.TrustFence -> stringResource(R.string.connect_fail_fence_title)
         failure is ConnectFailure.PairingRequired -> stringResource(R.string.connect_fail_pairing_title)
+        failure is ConnectFailure.RelayUnauthenticated ->
+            stringResource(R.string.connect_fail_relay_session_title)
         failure is ConnectFailure.CertificateChanged -> stringResource(R.string.connect_fail_certificate_title)
         authority.isBlank() -> null
         else -> stringResource(
@@ -693,6 +695,8 @@ private fun ConnectFailureBlock(
         ConnectFailure.TrustFence -> stringResource(R.string.connect_failed_fence)
         ConnectFailure.Unauthenticated -> stringResource(R.string.connect_fail_unauthenticated, authority)
         ConnectFailure.PairingRequired -> stringResource(R.string.connect_fail_pairing)
+        ConnectFailure.RelayUnauthenticated ->
+            stringResource(R.string.connect_fail_relay_session, authority)
         ConnectFailure.CertificateChanged -> stringResource(R.string.connect_fail_certificate, authority)
         ConnectFailure.DnsFailure -> stringResource(R.string.connect_fail_dns, authority)
         ConnectFailure.NotAHarness -> stringResource(R.string.connect_fail_not_harness, authority)

@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">Se connecter automatiquement à un relais appairé en Wi-Fi</string>
     <string name="connect_fail_pairing_title">Le relais a refusé cet appareil</string>
     <string name="connect_fail_pairing">Le relais n\'accepte plus le jeton de cet appareil. Il a peut-être expiré, ou été révoqué depuis la liste des appareils du relais. Appairez de nouveau pour en obtenir un autre.</string>
+    <string name="connect_fail_relay_session_title">Le relais n\'a pas de session pour le harness</string>
+    <string name="connect_fail_relay_session">%1$s a atteint le harness, et le harness a répondu 401 : le relais n\'avait pas de session de navigateur à lui pour s\'authentifier, donc chaque requête passant par lui a été refusée. Ce n\'est pas le jeton de cet appareil, et réappairer n\'y change rien. Mettez à jour dsh-relay sur cet ordinateur — le paquet 0.2.1 sur npm a été publié sans la signature de session — ou installez-le depuis les sources : dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
     <string name="connect_fail_certificate_title">La clé de ce relais a changé</string>
     <string name="connect_fail_certificate">%1$s a présenté une clé différente de celle enregistrée lors de l\'appairage. Cela arrive quand un relais régénère son certificat après un changement de réseau — mais c\'est indiscernable d\'autre chose qui répondrait à cette adresse. N\'appairez de nouveau que si vous vous y attendiez.</string>
     <string name="connect_pair_again">Appairer de nouveau</string>
