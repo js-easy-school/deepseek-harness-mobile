@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">Conectar automaticamente a um relay pareado no Wi-Fi</string>
     <string name="connect_fail_pairing_title">O relay recusou este dispositivo</string>
     <string name="connect_fail_pairing">O relay não aceita mais o token deste dispositivo. Ele pode ter expirado ou sido revogado na lista de dispositivos do relay. Pareie novamente para receber outro.</string>
+    <string name="connect_fail_relay_session_title">O harness recusou o relay</string>
+    <string name="connect_fail_relay_session">O relay em %1$s aceitou este dispositivo, mas o harness por trás dele respondeu 401: o relay não conseguiu se autenticar nele. Parear de novo não vai ajudar — atualize o dsh-relay naquele computador e reinicie o dsh web.</string>
     <string name="connect_fail_certificate_title">A chave deste relay mudou</string>
     <string name="connect_fail_certificate">%1$s apresentou uma chave diferente da que foi salva quando este dispositivo foi pareado. Isso acontece quando um relay regenera o certificado depois de mudar de rede — mas é idêntico a outra coisa respondendo nesse endereço. Pareie novamente só se você estava esperando por isso.</string>
     <string name="connect_pair_again">Parear novamente</string>

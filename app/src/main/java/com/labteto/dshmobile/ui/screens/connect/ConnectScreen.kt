@@ -35,6 +35,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.labteto.dshmobile.R
 import com.labteto.dshmobile.connection.ConnectMode
@@ -82,6 +84,10 @@ fun ConnectScreen(
     viewModel: ConnectViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Also fires when the screen comes back from pairing, settings or a dropped connection, because
+    // each of those removes this screen from composition. The view model outlives it, so without
+    // this a Recent row keeps whatever verdict it was last given — "unavailable" included.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshRecent() }
     val colors = DsTheme.colors
     // Saveable: a rotation mid-connect used to wipe a hand-typed address.
     var host by rememberSaveable { mutableStateOf("") }
@@ -673,6 +679,8 @@ private fun ConnectFailureBlock(
     val title = when {
         failure is ConnectFailure.TrustFence -> stringResource(R.string.connect_fail_fence_title)
         failure is ConnectFailure.PairingRequired -> stringResource(R.string.connect_fail_pairing_title)
+        failure is ConnectFailure.RelayUnauthenticated ->
+            stringResource(R.string.connect_fail_relay_session_title)
         failure is ConnectFailure.CertificateChanged -> stringResource(R.string.connect_fail_certificate_title)
         authority.isBlank() -> null
         else -> stringResource(
@@ -693,6 +701,8 @@ private fun ConnectFailureBlock(
         ConnectFailure.TrustFence -> stringResource(R.string.connect_failed_fence)
         ConnectFailure.Unauthenticated -> stringResource(R.string.connect_fail_unauthenticated, authority)
         ConnectFailure.PairingRequired -> stringResource(R.string.connect_fail_pairing)
+        ConnectFailure.RelayUnauthenticated ->
+            stringResource(R.string.connect_fail_relay_session, authority)
         ConnectFailure.CertificateChanged -> stringResource(R.string.connect_fail_certificate, authority)
         ConnectFailure.DnsFailure -> stringResource(R.string.connect_fail_dns, authority)
         ConnectFailure.NotAHarness -> stringResource(R.string.connect_fail_not_harness, authority)

@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">เชื่อมต่อรีเลย์ที่จับคู่ไว้อัตโนมัติเมื่ออยู่บน Wi-Fi</string>
     <string name="connect_fail_pairing_title">รีเลย์ปฏิเสธอุปกรณ์นี้</string>
     <string name="connect_fail_pairing">รีเลย์ไม่รับโทเคนของอุปกรณ์นี้อีกต่อไป โทเคนอาจหมดอายุ หรือถูกเพิกถอนจากรายการอุปกรณ์ของรีเลย์ จับคู่ใหม่เพื่อรับโทเคนใหม่</string>
+    <string name="connect_fail_relay_session_title">ฮาร์เนสปฏิเสธรีเลย์</string>
+    <string name="connect_fail_relay_session">รีเลย์ที่ %1$s ยอมรับอุปกรณ์นี้แล้ว แต่ฮาร์เนสที่อยู่เบื้องหลังตอบกลับ 401: รีเลย์ลงชื่อเข้าใช้ฮาร์เนสไม่ได้ การจับคู่ใหม่ไม่ช่วยอะไร — อัปเดต dsh-relay บนคอมพิวเตอร์เครื่องนั้นแล้วรีสตาร์ต dsh web</string>
     <string name="connect_fail_certificate_title">กุญแจของรีเลย์นี้เปลี่ยนไป</string>
     <string name="connect_fail_certificate">%1$s แสดงกุญแจที่ต่างจากที่บันทึกไว้ตอนจับคู่อุปกรณ์นี้ กรณีนี้เกิดขึ้นเมื่อรีเลย์สร้างใบรับรองใหม่หลังย้ายเครือข่าย แต่ก็ดูเหมือนกันทุกอย่างกับกรณีที่มีสิ่งอื่นตอบอยู่ที่อยู่นั้น จับคู่ใหม่ก็ต่อเมื่อคุณคาดหมายไว้แล้วเท่านั้น</string>
     <string name="connect_pair_again">จับคู่อีกครั้ง</string>

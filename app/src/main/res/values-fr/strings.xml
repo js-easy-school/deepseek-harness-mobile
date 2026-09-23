@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">Se connecter automatiquement à un relais appairé en Wi-Fi</string>
     <string name="connect_fail_pairing_title">Le relais a refusé cet appareil</string>
     <string name="connect_fail_pairing">Le relais n\'accepte plus le jeton de cet appareil. Il a peut-être expiré, ou été révoqué depuis la liste des appareils du relais. Appairez de nouveau pour en obtenir un autre.</string>
+    <string name="connect_fail_relay_session_title">Le harness a refusé le relais</string>
+    <string name="connect_fail_relay_session">Le relais à %1$s a accepté cet appareil, mais le harness derrière lui a répondu 401 : le relais n\'a pas pu s\'y connecter. Réappairer n\'y changera rien — mettez à jour dsh-relay sur cet ordinateur et redémarrez dsh web.</string>
     <string name="connect_fail_certificate_title">La clé de ce relais a changé</string>
     <string name="connect_fail_certificate">%1$s a présenté une clé différente de celle enregistrée lors de l\'appairage. Cela arrive quand un relais régénère son certificat après un changement de réseau — mais c\'est indiscernable d\'autre chose qui répondrait à cette adresse. N\'appairez de nouveau que si vous vous y attendiez.</string>
     <string name="connect_pair_again">Appairer de nouveau</string>

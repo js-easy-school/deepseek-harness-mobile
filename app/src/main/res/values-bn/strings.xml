@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">Wi-Fi-এ জোড়া লাগানো রিলের সঙ্গে স্বয়ংক্রিয়ভাবে সংযোগ করুন</string>
     <string name="connect_fail_pairing_title">রিলে এই ডিভাইসটি ফিরিয়ে দিয়েছে</string>
     <string name="connect_fail_pairing">রিলে আর এই ডিভাইসের টোকেন গ্রহণ করছে না। সেটির মেয়াদ শেষ হয়ে থাকতে পারে, বা রিলের ডিভাইস তালিকা থেকে বাতিল করা হয়েছে। নতুন টোকেন পেতে আবার জোড়া লাগান।</string>
+    <string name="connect_fail_relay_session_title">হারনেস রিলেকে ফিরিয়ে দিয়েছে</string>
+    <string name="connect_fail_relay_session">%1$s-এ থাকা রিলে এই ডিভাইসটি গ্রহণ করেছে, কিন্তু এর পেছনের হারনেস 401 ফিরিয়েছে: রিলে তাতে সাইন ইন করতে পারেনি। আবার জোড়া লাগালে কাজ হবে না — ওই কম্পিউটারে dsh-relay হালনাগাদ করুন এবং dsh web আবার চালু করুন।</string>
     <string name="connect_fail_certificate_title">এই রিলের কী বদলে গেছে</string>
     <string name="connect_fail_certificate">এই ডিভাইস জোড়া লাগানোর সময় সংরক্ষিত কী-এর বদলে %1$s অন্য একটি কী দেখিয়েছে। নেটওয়ার্ক বদলানোর পর রিলে তার সার্টিফিকেট নতুন করে তৈরি করলে এমন হয় — কিন্তু ওই ঠিকানায় অন্য কিছু উত্তর দিলেও ঠিক এমনই দেখায়। প্রত্যাশিত হলে তবেই আবার জোড়া লাগান।</string>
     <string name="connect_pair_again">আবার জোড়া লাগান</string>

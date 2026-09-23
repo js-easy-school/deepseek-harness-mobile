@@ -406,6 +406,8 @@
     <string name="connect_auto_relay">Auto-connect to a paired relay on Wi-Fi</string>
     <string name="connect_fail_pairing_title">The relay refused this device</string>
     <string name="connect_fail_pairing">The relay no longer accepts this device\'s token. It may have expired, or been revoked from the relay\'s device list. Pair again to be issued a new one.</string>
+    <string name="connect_fail_relay_session_title">The harness refused the relay</string>
+    <string name="connect_fail_relay_session">The relay at %1$s accepted this device, but the harness behind it answered 401: the relay could not sign in to it. Pairing again will not help — update dsh-relay on that computer and restart dsh web.</string>
     <string name="connect_fail_certificate_title">This relay\'s key changed</string>
     <string name="connect_fail_certificate">%1$s presented a different key from the one saved when this device paired. That happens when a relay regenerates its certificate after moving networks — but it looks the same as something else answering at that address. Pair again only if you were expecting it.</string>
     <string name="connect_pair_again">Pair again</string>

@@ -51,6 +51,23 @@ sealed interface ConnectFailure {
     data object PairingRequired : ConnectFailure
 
     /**
+     * A relay is in front of a harness that answered 401 to the relay's own request.
+     *
+     * Not the same thing as [PairingRequired], although both arrive by way of a relay: this device
+     * holds a credential the relay accepted, and the refusal is one hop further upstream. A relay
+     * proxies `/api` with a browser session it mints from the harness's own signing secret, and a
+     * build published without that step forwards anonymously — so a harness 0.1.2 or later answers
+     * 401 to every proxied call, including both mux upgrades, and the phone shows a working
+     * connection that never produces a session.
+     *
+     * Separated from [PairingRequired] because the fixes point at different machines, and pairing
+     * again — the move that message invites — changes nothing here: the device token was never the
+     * problem. dsh-relay 0.2.1 reached the npm registry without its session signing; installing it
+     * from source, or any release that carries the fix, is what ends this.
+     */
+    data object RelayUnauthenticated : ConnectFailure
+
+    /**
      * The relay's key is not the one pinned at pairing.
      *
      * Never silently retried and never downgraded to plain CA validation. The benign cause — the
@@ -90,7 +107,12 @@ sealed interface ConnectFailure {
             ProbeOutcome.PairingRequired -> PairingRequired
             ProbeOutcome.CertificateChanged -> CertificateChanged
             ProbeOutcome.TrustFence -> if (relay) PairingRequired else TrustFence
-            ProbeOutcome.Unauthenticated -> if (relay) PairingRequired else Unauthenticated
+            // A relay answers 403, never 401, so a 401 behind one is the harness refusing the
+            // relay's own upstream request — not this device's token. The probe says so itself;
+            // the branch below still covers a 401 that reaches here with a relay in front without
+            // having been through `DiscoveryEngine.probeOutcome`.
+            ProbeOutcome.RelayUnauthenticated -> RelayUnauthenticated
+            ProbeOutcome.Unauthenticated -> if (relay) RelayUnauthenticated else Unauthenticated
             ProbeOutcome.Refused -> Refused
             ProbeOutcome.Timeout -> Timeout
             ProbeOutcome.DnsFailure -> DnsFailure
@@ -124,7 +146,7 @@ sealed interface ConnectFailure {
         ): ConnectFailure = when (kind) {
             TransportFailure.CERTIFICATE_PIN -> CertificateChanged
             TransportFailure.TRUST_FENCE -> if (relay) PairingRequired else TrustFence
-            TransportFailure.UNAUTHENTICATED -> if (relay) PairingRequired else Unauthenticated
+            TransportFailure.UNAUTHENTICATED -> if (relay) RelayUnauthenticated else Unauthenticated
             TransportFailure.REFUSED -> Refused
             TransportFailure.TIMEOUT, TransportFailure.UNREACHABLE -> Timeout
             TransportFailure.DNS -> DnsFailure

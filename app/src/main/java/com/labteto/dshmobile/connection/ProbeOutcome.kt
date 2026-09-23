@@ -36,6 +36,19 @@ sealed interface ProbeOutcome {
     data object Unauthenticated : ProbeOutcome
 
     /**
+     * HTTP 401 from the harness that a relay is forwarding to: the relay reached upstream and was
+     * refused there, not here.
+     *
+     * A relay answers 403 for a device it will not accept — missing, expired and revoked tokens all
+     * — and never 401, so a 401 arriving through one can only be the harness's own answer, passed
+     * along with its status intact. It is the relay's browser session that is missing, and the
+     * relay is fixed on the computer; the phone's credential was accepted to get this far.
+     * Deliberately not [PairingRequired] for that reason: pairing again replaces the one thing that
+     * already worked.
+     */
+    data object RelayUnauthenticated : ProbeOutcome
+
+    /**
      * HTTP 403 from a relay: this device has no credential it will accept any more.
      *
      * The same status as [TrustFence], and the relay answers it for a missing, expired and revoked

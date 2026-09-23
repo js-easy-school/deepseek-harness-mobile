@@ -163,6 +163,9 @@ class ConnectViewModel @Inject constructor(
     /** The sweep in flight, so a second tap cannot start a rival one and Cancel has something to stop. */
     private var scanJob: Job? = null
 
+    /** The liveness pass in flight, so the screen coming back during one does not start a rival. */
+    private var probeJob: Job? = null
+
     /**
      * Exchange a harness launch token for a browser session, then retry the connection.
      *
@@ -254,7 +257,7 @@ class ConnectViewModel @Inject constructor(
             }
         }
         viewModelScope.launch { autoConnect() }
-        viewModelScope.launch { probeRemembered() }
+        refreshRecent()
     }
 
     /**
@@ -296,9 +299,18 @@ class ConnectViewModel @Inject constructor(
         }
     }
 
-    /** Re-run the liveness pass, e.g. after the user comes back to the screen. */
+    /**
+     * Re-run the liveness pass whenever the screen is shown again.
+     *
+     * This view model belongs to the activity, not to the screen: pairing, settings and the main
+     * screen replace the connect screen rather than stacking on it, so it survives all three. With
+     * the pass run only from `init`, a row marked unreachable by one failed attempt kept saying so
+     * for the life of the process — past the relay being fixed, and past a tap on that same row
+     * connecting at once. A pass already in flight is left to finish.
+     */
     fun refreshRecent() {
-        viewModelScope.launch { probeRemembered() }
+        if (probeJob?.isActive == true) return
+        probeJob = viewModelScope.launch { probeRemembered() }
     }
 
     /**

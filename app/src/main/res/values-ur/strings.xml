@@ -404,6 +404,8 @@
     <string name="connect_auto_relay">Wi-Fi پر جوڑے ہوئے ریلے سے خودکار رابطہ</string>
     <string name="connect_fail_pairing_title">ریلے نے اس ڈیوائس کو مسترد کر دیا</string>
     <string name="connect_fail_pairing">ریلے اب اس ڈیوائس کا ٹوکن قبول نہیں کرتا۔ ممکن ہے اس کی میعاد ختم ہو گئی ہو، یا اسے ریلے کی ڈیوائس فہرست سے منسوخ کر دیا گیا ہو۔ نیا ٹوکن حاصل کرنے کے لیے دوبارہ جوڑا بنائیں۔</string>
+    <string name="connect_fail_relay_session_title">ہارنیس نے ریلے کو مسترد کر دیا</string>
+    <string name="connect_fail_relay_session">%1$s پر موجود ریلے نے اس ڈیوائس کو قبول کر لیا، لیکن اس کے پیچھے موجود ہارنیس نے 401 واپس کیا: ریلے اس میں سائن ان نہیں کر سکا۔ دوبارہ جوڑا بنانے سے کچھ نہیں ہوگا — اُس کمپیوٹر پر dsh-relay اپ ڈیٹ کریں اور dsh web دوبارہ شروع کریں۔</string>
     <string name="connect_fail_certificate_title">اس ریلے کی کلید بدل گئی ہے</string>
     <string name="connect_fail_certificate">‎%1$s‎ نے اُس کلید سے مختلف کلید پیش کی جو اس ڈیوائس کا جوڑا بناتے وقت محفوظ ہوئی تھی۔ ایسا تب ہوتا ہے جب ریلے نیٹ ورک بدلنے کے بعد اپنا سرٹیفکیٹ دوبارہ بناتا ہے — مگر یہ بالکل ویسا ہی لگتا ہے جیسے اُس پتے پر کوئی اور جواب دے رہا ہو۔ دوبارہ جوڑا صرف تب بنائیں جب آپ کو اس کی توقع تھی۔</string>
     <string name="connect_pair_again">دوبارہ جوڑا بنائیں</string>
