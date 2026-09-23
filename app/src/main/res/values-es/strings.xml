@@ -404,8 +404,8 @@
     <string name="connect_auto_relay">Conectar automáticamente a un relé emparejado por wifi</string>
     <string name="connect_fail_pairing_title">El relé rechazó este dispositivo</string>
     <string name="connect_fail_pairing">El relé ya no acepta el token de este dispositivo. Puede haber caducado o haberse revocado en la lista de dispositivos del relé. Vuelve a emparejar para obtener uno nuevo.</string>
-    <string name="connect_fail_relay_session_title">El relé no tiene sesión con el harness</string>
-    <string name="connect_fail_relay_session">%1$s llegó al harness y el harness respondió 401: el relé no tenía una sesión de navegador propia con la que identificarse, así que se rechazó cada petición que pasaba por él. No es el token de este dispositivo, y volver a emparejar no cambia nada. Actualiza dsh-relay en ese ordenador — el paquete 0.2.1 de npm se publicó sin la firma de sesión — o instálalo desde el código fuente: dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
+    <string name="connect_fail_relay_session_title">El harness rechazó el relé</string>
+    <string name="connect_fail_relay_session">El relé en %1$s aceptó este dispositivo, pero el harness que tiene detrás respondió 401: el relé no pudo iniciar sesión en él. Volver a emparejar no servirá — actualiza dsh-relay en ese ordenador y reinicia dsh web.</string>
     <string name="connect_fail_certificate_title">La clave de este relé ha cambiado</string>
     <string name="connect_fail_certificate">%1$s presentó una clave distinta de la que se guardó al emparejar este dispositivo. Eso ocurre cuando un relé regenera su certificado tras cambiar de red, pero se ve igual que si otra cosa respondiera en esa dirección. Vuelve a emparejar solo si lo esperabas.</string>
     <string name="connect_pair_again">Volver a emparejar</string>

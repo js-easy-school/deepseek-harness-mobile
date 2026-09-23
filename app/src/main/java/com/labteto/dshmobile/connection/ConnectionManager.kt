@@ -231,9 +231,9 @@ class ConnectionManager @Inject constructor(
             is GenerationFailure.ReadyFailed -> TransportFailures.of(failure.error)
             is GenerationFailure.MuxTimedOut -> null
         }
-        // UNAUTHENTICATED joins the two: harness 0.1.2 answers 401 where a browser session is
-        // missing, and behind a relay that is the same dead end as a rejected credential —
-        // retrying cannot produce one.
+        // UNAUTHENTICATED is terminal for a different reason. Behind a relay it is the harness
+        // refusing the relay's own request, not this device's credential — but nothing the phone
+        // retries will make the relay sign in; that takes a relay fixed on its own computer.
         return kind == TransportFailure.TRUST_FENCE ||
             kind == TransportFailure.CERTIFICATE_PIN ||
             kind == TransportFailure.UNAUTHENTICATED

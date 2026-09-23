@@ -406,8 +406,8 @@
     <string name="connect_auto_relay">Auto-connect to a paired relay on Wi-Fi</string>
     <string name="connect_fail_pairing_title">The relay refused this device</string>
     <string name="connect_fail_pairing">The relay no longer accepts this device\'s token. It may have expired, or been revoked from the relay\'s device list. Pair again to be issued a new one.</string>
-    <string name="connect_fail_relay_session_title">The relay has no session for the harness</string>
-    <string name="connect_fail_relay_session">%1$s reached the harness, and the harness answered 401: the relay had no browser session of its own to sign in with, so every request through it was refused. This is not this device\'s token, and pairing again changes nothing. Update dsh-relay on that computer — the 0.2.1 package on npm was published without its session signing — or install it from source: dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
+    <string name="connect_fail_relay_session_title">The harness refused the relay</string>
+    <string name="connect_fail_relay_session">The relay at %1$s accepted this device, but the harness behind it answered 401: the relay could not sign in to it. Pairing again will not help — update dsh-relay on that computer and restart dsh web.</string>
     <string name="connect_fail_certificate_title">This relay\'s key changed</string>
     <string name="connect_fail_certificate">%1$s presented a different key from the one saved when this device paired. That happens when a relay regenerates its certificate after moving networks — but it looks the same as something else answering at that address. Pair again only if you were expecting it.</string>
     <string name="connect_pair_again">Pair again</string>

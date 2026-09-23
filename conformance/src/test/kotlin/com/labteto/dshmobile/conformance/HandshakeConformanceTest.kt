@@ -63,7 +63,7 @@ class HandshakeConformanceTest {
         }
     }
 
-    /** Without a session the harness answers 401, which the client reads as "pair again". */
+    /** Without a session the harness answers 401, which the client reads as a missing session. */
     @Test
     fun `an unauthenticated call is unauthenticated, not a broken connection`() = runBlocking {
         when (val result = client.anonymous().sessionList()) {

@@ -68,6 +68,16 @@ cookie, and the relay deliberately strips the client's `Cookie` header before
 forwarding — so every proxied request is answered 401 until the relay supplies
 a harness session of its own. That is a relay change, not an app one.
 
+A relay build that lacks the session signing fails the same way whatever its
+version says. **`dsh-relay` 0.2.1 as published to npm is one**: the tarball was
+packed from a stale build, so pairing succeeds and every proxied call — both mux
+upgrades included — comes back 401
+([deepseek-harness-relay#6](https://github.com/sorsama/deepseek-harness-relay/pull/6)).
+Install it from source instead,
+`dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1`, or
+any later release that carries the fix. The app reports this as the harness
+refusing the relay, not as a pairing problem (see `docs/PROTOCOL.md`).
+
 Both versions are checked, unlike the harness baseline. A pairing payload is a
 credential exchange, so a `kind` other than `dsh-relay-pair` or a `v` above the
 one this build understands is refused outright rather than degraded — see
@@ -92,7 +102,7 @@ What it establishes today, against `0.1.6-alpha.2`:
 
 - the launch-token exchange really does buy a session, and that session really does open `/api` —
   a tier `mock-harness` cannot model, because it implements no `GET /?token=` at all;
-- an unauthenticated call is a 401 and reads as "pair again", not as a broken connection;
+- an unauthenticated call is a 401 and reads as a missing session, not as a broken connection;
 - `$events` opens with a `ready` frame carrying a usable `clientId` and host home;
 - **every endpoint this client calls is understood by the harness** — the gateway matches args
   against the host method's own parameter names, exactly, so a rename or a moved shape is a refusal

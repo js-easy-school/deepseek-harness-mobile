@@ -35,6 +35,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.labteto.dshmobile.R
 import com.labteto.dshmobile.connection.ConnectMode
@@ -82,6 +84,10 @@ fun ConnectScreen(
     viewModel: ConnectViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Also fires when the screen comes back from pairing, settings or a dropped connection, because
+    // each of those removes this screen from composition. The view model outlives it, so without
+    // this a Recent row keeps whatever verdict it was last given — "unavailable" included.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshRecent() }
     val colors = DsTheme.colors
     // Saveable: a rotation mid-connect used to wipe a hand-typed address.
     var host by rememberSaveable { mutableStateOf("") }

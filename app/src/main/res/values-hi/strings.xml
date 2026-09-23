@@ -404,8 +404,8 @@
     <string name="connect_auto_relay">Wi-Fi पर पेयर किए गए रिले से अपने आप कनेक्ट करें</string>
     <string name="connect_fail_pairing_title">रिले ने इस डिवाइस को अस्वीकार किया</string>
     <string name="connect_fail_pairing">रिले अब इस डिवाइस का टोकन स्वीकार नहीं करता। वह समाप्त हो चुका हो सकता है, या रिले की डिवाइस सूची से रद्द कर दिया गया हो। नया टोकन पाने के लिए दोबारा पेयर करें।</string>
-    <string name="connect_fail_relay_session_title">रिले के पास हार्नेस के लिए कोई सत्र नहीं है</string>
-    <string name="connect_fail_relay_session">%1$s हार्नेस तक पहुँचा, और हार्नेस ने 401 लौटाया: रिले के पास खुद को साइन इन करने के लिए अपना ब्राउज़र सत्र नहीं था, इसलिए उसके ज़रिए हर अनुरोध अस्वीकार कर दिया गया। यह इस डिवाइस का टोकन नहीं है, और दोबारा पेयर करने से कुछ नहीं बदलेगा। उस कंप्यूटर पर dsh-relay अपडेट करें — npm पर 0.2.1 पैकेज बिना सत्र हस्ताक्षर के प्रकाशित हुआ था — या इसे स्रोत से इंस्टॉल करें: dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
+    <string name="connect_fail_relay_session_title">हार्नेस ने रिले को अस्वीकार किया</string>
+    <string name="connect_fail_relay_session">%1$s पर मौजूद रिले ने इस डिवाइस को स्वीकार किया, लेकिन उसके पीछे के हार्नेस ने 401 लौटाया: रिले उसमें साइन इन नहीं कर सका। दोबारा पेयर करने से कुछ नहीं होगा — उस कंप्यूटर पर dsh-relay अपडेट करें और dsh web को फिर से शुरू करें।</string>
     <string name="connect_fail_certificate_title">इस रिले की कुंजी बदल गई है</string>
     <string name="connect_fail_certificate">%1$s ने उस कुंजी से अलग कुंजी दी जो इस डिवाइस के पेयर होते समय सहेजी गई थी। नेटवर्क बदलने के बाद रिले अपना सर्टिफ़िकेट फिर से बनाता है तब ऐसा होता है — पर यह उस स्थिति जैसा ही दिखता है जब उस पते पर कोई और जवाब दे रहा हो। दोबारा पेयर तभी करें जब आपको इसकी उम्मीद थी।</string>
     <string name="connect_pair_again">दोबारा पेयर करें</string>

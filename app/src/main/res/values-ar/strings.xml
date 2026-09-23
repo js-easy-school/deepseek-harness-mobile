@@ -404,8 +404,8 @@
     <string name="connect_auto_relay">الاتصال تلقائيًا بمُرحِّل مقترن عبر الواي فاي</string>
     <string name="connect_fail_pairing_title">رفض المُرحِّل هذا الجهاز</string>
     <string name="connect_fail_pairing">لم يعد المُرحِّل يقبل رمز هذا الجهاز. قد تكون صلاحيته انتهت أو أُبطِل من قائمة أجهزة المُرحِّل. كرّر الاقتران للحصول على رمز جديد.</string>
-    <string name="connect_fail_relay_session_title">لا توجد للمُرحِّل جلسة مع الخادم</string>
-    <string name="connect_fail_relay_session">‏%1$s وصل إلى الخادم، لكن الخادم ردّ بالرمز 401: لم يكن للمُرحِّل جلسة متصفح خاصة به ليُعرّف بها عن نفسه، لذلك رُفض كل طلب يمر عبره. هذا ليس رمز هذا الجهاز، وإعادة الاقتران لن تغيّر شيئًا. حدِّث dsh-relay على ذلك الكمبيوتر — نُشرت حزمة 0.2.1 على npm بدون توقيع الجلسة — أو ثبّتها من المصدر: dsh plugin --profile web add github:sorsama/deepseek-harness-relay#v0.2.1</string>
+    <string name="connect_fail_relay_session_title">رفض الخادم المُرحِّل</string>
+    <string name="connect_fail_relay_session">قبِل المُرحِّل على %1$s هذا الجهاز، لكن الخادم الذي خلفه ردّ بالرمز 401: لم يتمكّن المُرحِّل من تسجيل الدخول إليه. إعادة الاقتران لن تفيد — حدِّث dsh-relay على ذلك الكمبيوتر ثم أعد تشغيل dsh web.</string>
     <string name="connect_fail_certificate_title">تغيّر مفتاح هذا المُرحِّل</string>
     <string name="connect_fail_certificate">قدّم %1$s مفتاحًا مختلفًا عن المفتاح المحفوظ عند اقتران هذا الجهاز. يحدث ذلك عندما يعيد المُرحِّل توليد شهادته بعد تغيير الشبكة، لكنه يبدو تمامًا كأن شيئًا آخر يستجيب على ذلك العنوان. لا تكرّر الاقتران إلا إذا كنت تتوقع هذا.</string>
     <string name="connect_pair_again">تكرار الاقتران</string>

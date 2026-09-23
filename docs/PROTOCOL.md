@@ -563,13 +563,14 @@ privileged method that credential may not reach.
 
 A 401 reaching the app from behind a relay therefore did not come from the relay:
 it is the *harness* refusing the relay's own upstream request for want of a
-browser session, forwarded verbatim. The app treats it as a pairing problem for a
-relay address, because from the phone's side there is nothing else it could act
-on — but the fix is on the relay.
+browser session, forwarded verbatim. The app says so — the harness refused the
+relay — and does not offer to pair again: the device token was accepted to get
+that far, and a new one would change nothing. The fix is on the relay's computer
+(see `docs/COMPATIBILITY.md`).
 
 | Code | Meaning | What the app does |
 |---|---|---|
-| 401 | the harness has no browser session (forwarded from upstream) | Stops the loop; against a relay this is an operator-side fault, not a pairing one |
+| 401 | the harness has no browser session (forwarded from upstream) | Stops the loop and says the harness refused the relay. Pairing again is not offered — the fault is on the relay's computer |
 | 403 | no usable credential | Stops the loop and says "pair again". No backoff — there is nothing to wait for. |
 | 404 | path not proxied, or the harness lacks the capability | Existing `capability-unavailable` handling |
 | 429 | rate limited or locked out | Backs off for `Retry-After`, defaulting to 60s when the header is absent — older relays omitted it on the lockout paths |
